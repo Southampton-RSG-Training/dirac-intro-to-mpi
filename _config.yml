@@ -50,7 +50,7 @@ instructor-email:
 # rsg: Southampton Research Software Group
 carpentry: "rsg"
 # Change this to the canonical gh-name. This should only be updated if ALL the lesson slugs are also updated.
-gh-name: "lesson-template"
+gh-name: "dirac-intro-to-mpi"
 
 # Life cycle stage of the lesson
 # See this page for more details: https://cdh.carpentries.org/the-lesson-life-cycle.html
