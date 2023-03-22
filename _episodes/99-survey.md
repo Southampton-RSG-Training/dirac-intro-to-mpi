@@ -1,6 +1,6 @@
 ---
 title: "Survey"
-slug: dirac-intro-to-mpi-lesson-survey
+slug: lesson-survey
 layout: page
 ---
 
