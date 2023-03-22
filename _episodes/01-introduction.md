@@ -1,15 +1,15 @@
 ---
-title: "Introduction"
-slug: "lesson-introduction"
+title: "Introduction to Distributed Memory Parallelisation"
+slug: "dirac-intro-to-mpi-distributed-memory"
 teaching: 0
 exercises: 0
 questions:
-- "Key question (FIXME)"
+-
 objectives:
-- "First learning objective. (FIXME)"
+- Understand what distributed memory parallelisation is
+- Understand the advantages and disadvantages of distributed memory parallelisation
 keypoints:
-- "First key point. Brief Answer to questions. (FIXME)"
+-
 ---
-FIXME
 
-{% include links.md %}
+TODO
