@@ -31,8 +31,8 @@ Sending and receiving data usually follows a set of standard communication patte
 from one specific rank to another, known as point-to-point communication, or to/from multiple ranks all at once,
 known as collective communication. In both cases, we need to *explicitly* "send" something and to *explicitly* "receive"
 something. The reason for emphasis on *explicitly* is because data communication does not magically happen by itself in
-the background. If we do not program data communication, data won't be shared. It should also be noted that none of this
-communication happens for free, and there is an associated overhead which may negatively impact performance if you are
+the background. If we do not program data communication, data won't be shared. It should be noted that none of this
+communication happens for free. There is an associated overhead which may negatively impact performance if you are
 working with a large amount of data or are continuously communicating small amounts of data.
 
 No matter which communication pattern you use, point-to-point or collective, the same process happens to communicate the
