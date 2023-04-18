@@ -1,8 +1,8 @@
 ---
 title: Communicating Data in MPI
 slug: dirac-intro-to-mpi-communicating-data
-teaching: 15
-exercises: 10
+teaching: 10
+exercises: 0
 questions:
 - How do I exchange data between MPI ranks?
 objectives:
