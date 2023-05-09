@@ -1,7 +1,7 @@
 ---
 title: Communicating Data in MPI
 slug: dirac-intro-to-mpi-communicating-data
-teaching: 10
+teaching: 15
 exercises: 0
 questions:
 - How do I exchange data between MPI ranks?
@@ -91,29 +91,35 @@ crashed rank.
 > accidentally cause a deadlock.
 {: .callout}
 
-Blocking communication typically works best when the work is balanced across ranks, so that each rank has an equal
-amount of things to do. A common pattern in scientific pattern is to split a calculation across a grid and then to share
-the results between all ranks before moving onto the next calculation. If the workload is well balanced, each rank
-should finish at roughly the same time and thus be ready to send and receive data at the same time. But if the workload
-is unbalanced, some ranks will finish their calculations earlier and begin to send their data to the other ranks before
-they are ready to receive data. This means some ranks will be sitting around doing nothing whilst they wait for the
-other ranks to become ready to receive data, wasting computation time. If most of the ranks are waiting around, or one
-rank is very heavily loaded in comparison, this could massively impact the performance of your program as instead of
-doing calculations it is sitting around waiting for other ranks to complete their work.
+Blocking communication works best when the work is balanced across ranks, so that each rank has an equal amount of
+things to do. A common pattern in scientific pattern is to split a calculation across a grid and then to share the
+results between all ranks before moving onto the next calculation. If the workload is well balanced, each rank will
+finish at roughly the same time and be ready to transfer data at the same time. But, as shown in the diagram below, if
+the workload is unbalanced, some ranks will finish their calculations earlier and begin to send their data to the other
+ranks before they are ready to receive data. This means some ranks will be sitting around doing nothing whilst they wait
+for the other ranks to become ready to receive data, wasting computation time.
 
-Non-blocking communication, on the other hand, will hand control back to the program before the communication has
-completed fully. Instead of your program being *blocked* by communication, a rank will go immediately back
-to performing calculations and instead will periodically check if there is data to receive instead of waiting around.
+<img src="fig/blocking-wait.png" alt="Blocking communication" height="250"/>
+
+If most of the ranks are waiting around, or one rank is very heavily loaded in comparison, this could massively impact
+the performance of your program. Instead of doing calculations, a rank will be waiting for other ranks to complete their
+work.
+
+Non-blocking communication hands back control, immediately, before the communication has finished. Instead of your
+program being *blocked* by communication, ranks will immediately go back to the heavy work and instead periodically
+check if there is data to receive (which you must remember to program) instead of waiting around. The advantage of this
+communication pattern is illustrated in the diagram below, where less time is spent communicating.
+
+<img src="fig/non-blocking-wait.png" alt="Non-blocking communication" height="250"/>
+
 This is a common pattern where communication and calculations are interwoven with one another, decreasing the amount of
-"dead time" where ranks are waiting for other ranks to communicate data.
+"dead time" where ranks are waiting for other ranks to communicate data. Unfortunately, non-blocking communication is
+often more difficult to successfully implement and isn't appropriate for every algorithm. In most cases, blocking
+communication is usually easier to implement and to conceptually understand, and is somewhat "safer" in the sense that
+the program cannot continue if data is missing. However, the potential performance improvements of overlapping
+communication and calculation is often worth the more difficult implementation and harder to read/more complex code.
 
-Unfortunately, non-blocking communication is often more difficult to successfully implement and isn't appropriate for
-every algorithm. In most cases, blocking communication is usually easier to implement and to conceptually understand,
-and is somewhat "safer" in the sense that the program cannot continue if data is missing. However, the potential
-performance improvements of overlapping communication and calculation is often worth the more difficult implementation
-and harder to read/more complex code.
-
-> ## Should I start with blocking or non-blocking communication?
+> ## Should I use blocking or non-blocking communication?
 >
 > When you are first implementing communication into your program, it's advisable to first use blocking synchronous
 > sends to start with, as this is arguably the easiest to use pattern. Once you are happy that the correct data is being
