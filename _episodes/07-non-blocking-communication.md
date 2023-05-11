@@ -48,4 +48,8 @@ MPI_Wait();
 
 ```
 
+Does live reload work? James May.
+
+<img src="fig/birb.jpg" alt="Blocking communication" height="250"/>
+
 ## Collective communication

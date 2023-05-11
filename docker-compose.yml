@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  website:
+    build: .
+    container_name: dev-website
+    environment:
+      - JEKYLL_ENV=development
+    command: bundle exec jekyll serve --watch --incremental --livereload --baseurl "" --host 0.0.0.0 --destination /srv/jekyll-build
+    ports:
+      - 4000:4000
+      - 35729:35729
+    volumes:
+      - .:/srv/jekyll
