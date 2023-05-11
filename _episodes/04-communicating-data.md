@@ -2,7 +2,7 @@
 title: Communicating Data in MPI
 slug: dirac-intro-to-mpi-communicating-data
 teaching: 15
-exercises: 0
+exercises: 5
 questions:
 - How do I exchange data between MPI ranks?
 objectives:
@@ -38,6 +38,17 @@ sent, there is an associated overhead which impacts the performance of your prog
 overhead, as it is quite small. But if we communicate large amounts data or too often, those small overheads can rapidly
 add up into a noticeable performance hit.
 
+> ## Common mistakes
+>
+> A common mistake for new MPI users is to write code using point-to-point communication which emulates what the
+> collective communication functions are designed to do. This is an inefficient way to share data. The collective
+> routines in MPI have multiple tricks and optimizations up their sleeves, resulting in communication overheads much
+> lower than the equivalent point-to-point approach. One other advantage is that collective communication often requires
+> less code to achieve the same thing, which is always a win. It is there almost always better to use collective
+> operations where you can.
+>
+{: .callout}
+
 To get an idea of how communication typically happens, imagine we have two ranks: rank A and rank B. If rank A wants to
 send data to rank B (e.g., point-to-point), it must first call the appropriate MPI send function which puts that data
 into an internal *buffer*; sometimes known as the send buffer or envelope. Once the data is in the buffer, MPI figures
@@ -45,6 +56,21 @@ out how to route the message to rank B (usually over a network) and sends it to 
 a data receiving function which will listen for any messages being sent. When the message has been successfully routed
 and the data transfer complete, rank B sends an acknowledgement back to rank A to say that the transfer has finished,
 similarly to how read receipts work in e-mails and instant messages.
+
+> ## Check your understanding
+>
+> In an imaginary simulation, each rank is responsible for calculating the physical properties for a subset of
+> cells on a larger simulation grid. Another calculation, however, needs to know the average of, for example, the
+> temperature for the subset of cells for each rank. What approaches could you use to share this data?
+>
+> > ## Solution
+> >
+> > There are multiple ways to approach this situation, but the most efficient approach would be to use collective
+> > operations to send the average temperature to a root rank (or all ranks) to perform the final calculation. You can,
+> > of course, also use a point-to-point pattern, but it would be less efficient.
+> >
+> {: .solution}
+{: .challenge}
 
 ### Communication modes
 
@@ -128,6 +154,26 @@ communication and calculation is often worth the more difficult implementation a
 > readability and maintainability.
 >
 {: .callout}
+
+> ## MPI communication in everyday life?
+>
+> We communicate with people non-stop in everyday life, whether we want to or not! Think of some examples/analogies of
+> blocking and non-blocking communication we use to talk to other people.
+>
+> > ## Solution
+> >
+> > Probably the most common example of blocking communication in everyday life would be having a conversation or a
+> > phone call with someone. The conversation can't happen and data can't be communicated until the other person
+> > responds or picks up the phone. Until the other person responds, we are stuck waiting for the response.
+> >
+> > Sending e-mails or letters in the post is a form of non-blocking communication we're all familiar with. When we send
+> > an e-mail, or a letter, we don't wait around to hear back for a response. We instead go back to our lives and start
+> > doing tasks instead. We can periodically check our e-mail for the response, and either keep doing other tasks or
+> > continue our previous task once we've received a response back from our e-mail.
+> >
+> {: .solution}
+>
+{: .challenge}
 
 ## Communicators
 
@@ -234,3 +280,21 @@ analogous to defining structures or type definitions in C. They're most often he
 send/receive multiple things in a single communication, or when you need to communicate non-contiguous data such as
 "vectors" or sub-sets of an array. This will be covered in the [Advanced Communication
 Techniques](dirac-intro-to-mpi-advanced-communication) episode.
+
+> ## What type should you use?
+>
+> For the following pieces of data, what MPI data types should you use?
+>
+> 1. `a[] = {1, 2, 3, 4, 5};`
+> 2. `a[] = {1.0, -2.5, 3.1456, 4591.223, 1e-10};`
+> 3. `a[] = "Hello, world!";`
+>
+> > ## Solution
+> >
+> > 1. `MPI_INT`
+> > 2. `MPI_DOUBLE` - `MPI_FLOAT` would not be correct as `float`'s contain 32 bits of data whereas `double`'s
+> >    are 64 bit.
+> > 3. `MPI_BYTE` or `MPI_CHAR` - you may want to use [strlen](https://man7.org/linux/man-pages/man3/strlen.3.html) to
+> >    calculate how many elements of `MPI_CHAR` being sent
+> {: .solution}
+{: .challenge}
