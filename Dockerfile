@@ -6,11 +6,17 @@ WORKDIR /srv/jekyll
 RUN apt-get update && apt-get install -y ruby-full nodejs npm
 RUN gem install bundler
 
-COPY requirements.txt .
-COPY Gemfile .
+SHELL ["/bin/bash", "-c"]
+ENV VIRTUAL_ENV=/opt/venv
+RUN python3 -m venv $VIRTUAL_ENV
+ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 
+COPY . .
 RUN pip install -r requirements.txt
 RUN bundle install
 RUN npm install livereload
 
-CMD ["bash", "bin/build_me.sh"]
+RUN python bin/get_schedules.py
+RUN python bin/get_setup.py
+
+CMD ["bundle", "exec", "jekyll", "serve", "--watch", "--incremental", "--livereload", "--host", "0.0.0.0"]
