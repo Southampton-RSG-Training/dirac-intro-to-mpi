@@ -19,3 +19,5 @@ vendor/
 venv/
 .venv/
 .vscode
+setup.md
+_includes/
