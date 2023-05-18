@@ -105,87 +105,117 @@ are sent (because those are contiguous) instead of `[0][1]`, `[1][1]`, `[2][1]` 
 
 > ## What about if I use `malloc`?
 >
-> Rather unfortunately, `malloc` *does not* guarantee contiguous memory when used to allocate multi-dimension arrays.
-> This makes our life tricky when we want to communicate them, because the basic communication functions require that
-> the data structure to be communicate is one contiguous block of memory. One workaround is to allocate only 1D arrays
-> with the same number of elements as the higher dimension array, and to map the coordinates into a 1D coordinate
-> system. For example, elements in a a 3 x 5 matrix mapped onto a 1D array would be accessed as such,
+> `malloc` *does not* guarantee contiguous memory when allocating multi-dimensional arrays (or pointer arrays). This
+> makes life tricky to communicate them, since the communication functions in MPI assume the data we are communicating
+> is contiguous in memory. There are workarounds though. One workaround is to only work with 1D arrays (with the same
+> number of elements as the higher dimension array) and to map the multi-d coordinates into the 1D memory space. For
+> example, the element `[2][4]` in a a 3 x 5 matrix mapped in 1D would be accessed as,
 >
 > ```c
 > int index_for_2_4 = matrix1d[5 * 2 + 4];  // num_cols * row + col
 > ```
 >
-> Another solution is to use something like
-> [`arralloc.c`](https://www.maths.tcd.ie/~bouracha/college/Edinburgh/term1/programming_skills/code_development/project/src/arralloc.c),
-> which is a clever function which can allocate multi-dimensional arrays into a single block of memory.
+> Another solution is to use a clever function [`arralloc.c`](code/arralloc.c) which can allocate multi-dimensional
+> arrays into a single block of memory.
 >
 > ```c
 > int **matrix = arralloc(sizeof int, 2, 5);
 > /* but to send an arralloc'd array, we need to pass the address of the first element to MPI functions */
 > MPI_Send(&matrix[0][0], 2 * 5, MPI_INT, ...);
+> /* the pointer is free'd as you would free a 1d array */
+> free(matrix);
 > ```
 >
 {: .callout}
 
-### Using vectors to send slices
+### Using vectors to send slices of an array
 
 To send a single column for a matrix or tensor, we have to use a *vector*. A vector in MPI is a datatype that represents
-a continuous sequence of elements which have a regular spacing between them. Using vectors, we can send columns, rows or
-sub-arrays of a larger array in a single communication.
+a continuous sequence of elements which have a regular spacing between them. Using vectors, we can create columns
+vectors, rows vectors or sub-arrays of a larger array, similar to how we can [create slices for Numpy arrays in
+Python](https://numpy.org/doc/stable/user/basics.indexing.html), which can be sent in a single communication. To create
+a vector, we have to create a new datatype to represent the vector using `MPI_Type_vector()`,
 
 ```c
 int MPI_Type_vector(
-   int count,              /* the number of 'blocks' to count in the vector */
-   int blocklength,        /* the number of elements which makes up a block */
+   int count,              /* the number of 'blocks' which makes up the vector */
+   int blocklength,        /* the number of contiguous elements in a block */
    int stride,             /* the number of elements between the start of each block */
-   MPI_Datatype oldtype,   /* the datatype of the elements of the block */
-   MPI_Datatype * newtype  /* the newly created datatype */
+   MPI_Datatype oldtype,   /* the datatype of the elements of the vector, e.g. MPI_INT, MPI_FLOAT */
+   MPI_Datatype * newtype  /* the new datatype which represents the vector  - note that this is a pointer */
 );
 ```
 
-```c
-int MPI_Type_commit(
-   MPI_Datatype * datatype  /* the datatype to commit */
-);
-```
+To understand what some of these arguments mean, consider the diagram below which is creating a vector to send two rows
+with a row in between,
 
 <img src="fig/vector_linear_memory.png" alt="How a vector is laid out in memory" height=210>
 
-The following example shows how to send the middle column in a 3x3 array.
+First of all, let's clarify some jargon: a *block* refers to a sequence of contiguous elements. In the diagrams above,
+each sequence of contiguous purple or orange elements represents a block. The *block length* refers to the number of
+elements within a block; in the above examples this is four. The *stride* is the distance between the start of each
+block. When we define a vector, we create a datatype that includes one or more blocks of contiguous elements, with a
+regular spacing between them.
+
+Before we can use a vector, it has to first be committed using `MPI_Type_commit` which finalises the creation of a
+custom datatype. Forgetting to do this step can lead to unexpected behaviour and potentially disastrous consequences!
 
 ```c
-MPI_Datatype row_t;      /* our new type is a MPI_Datatype */
-
-MPI_Type_vector(1,       /* count is number of blocks, e.g. the number of rows we want */
-                3,       /* blocklength is the number of contiguous elements which form a block */
-                3,       /* stride is the number of elements between each contiguous block */
-                MPI_INT, /* oldtype states the datatype of the vector */
-                &row_t   /* a pointer to initialize our new datatype */
+int MPI_Type_commit(
+   MPI_Datatype * datatype  /* the datatype to commit - note that this is a pointer */
 );
+```
 
-MPI_Type_commit(&row_t); /* the new type has to be "committed" to ready for use */
+The following example code uses an vector to send the two rows from a 4 x 4 matrix.
 
-int recv_buffer[3];
-int send_buffer[3][3] = {
-   {0, 1, 2},
-   {3, 4, 5},
-   {6, 7, 8},
+```c
+/* The vector is a MPI_Datatype */
+MPI_Datatype rows_type;
+
+/* Create the vector type */
+const int count = 2;
+const int blocklength = 4;
+const int stride = 8;
+MPI_Type_vector(count, blocklength, stride, MPI_INT, &rows_type);
+
+/* Don't forget to commit it */
+MPI_Type_commit(&rows_type);
+
+/* Send the middle row of our 2d send_buffer array. Note that we are sending
+ &send_buffer[1][0] and not send_buffer. This is because we are using an offset
+ to change the starting point of where we begin sending memory
+ */
+int matrix[4][4] = {
+   { 1,  2,  3,  4},
+   { 5,  6,  7,  8},
+   { 9, 10, 11, 12},
+   {13, 14, 15, 16},
 };
 
-/* send the middle row of our 2d send_buffer array. Note that we are sending
- &send_buffer[1][0] and not send_buffer. This is because we need to send the
- starting point of the vector type instead of the first element of the array
- */
-MPI_Send(&send_buffer[1][0], 1, row_t, 1, 0, MPI_COMM_WORLD);
+MPI_Send(&matrix[1][0], 1, rows_type, 1, 0, MPI_COMM_WORLD);
 
-/* the receive function doesn't "work" with vector types, so we have to
-   say that we are expecting 3 ints instead */
-MPI_Recv(recv_buffer, 3, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+/* The receive function doesn't "work" with vector types, so we have to
+   say that we are expecting 8 integers instead */
+const int num_elements = count * blocklength;
+int recv_buffer[num_elements];
+MPI_Recv(recv_buffer, num_elements, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 ```
+
+There are two things above, which look quite innocent, but are actually vitally important. First of all, the send buffer
+in `MPI_Send` is not `matrix` but `&matrix[1][0]`. In `MPI_Send`, the send buffer is a pointer to the memory
+location where the start of the data is stored. In the above example, the intention is to only send the second and forth
+rows, so the start location of the (contiguous) data is the memory address of element `[1][0]` instead. If we used
+`matrix`, the first and third row would be sent instead.
+
+The other thing to notice, which is not immediately clear why it's done this way, is that the receive datatype is
+`MPI_INT` and the count is `num_elements = count * blocklength` elements instead of a single element `rows_type`.
+This is because when a rank receives data, the data is contiguous. We don't need to use a vector to describe the layout
+of the (non-contiguous) data like we do when we are sending it. We are really just receiving a 1D contiguous array of
+`num_elements = count * blocklength` integers.
 
 > ## Sending columns from an array
 >
-> For the following 2 x 3 array,
+> Create a vector type to send a column in the following 2 x 3 array,
 >
 > ```c
 > int matrix[2][3] = {
@@ -194,10 +224,19 @@ MPI_Recv(recv_buffer, 3, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 >  };
 >```
 >
-> create a vector type to send a single column and communicate the middle column (elements `matrix[0][1]` and
-> `matrix[1][1]`) from one rank to another.
+> With that vector type, send the middle column of the matrix (elements `matrix[0][1]` and `matrix[1][1]`) from
+> rank 0 to rank 1 and print the results.
 >
 > > ## Solution
+> >
+> > If your solution is correct you should see 2 and 5 printed to the screen. In the solution below, to send a 2 x 1
+> > column of the matrix, we created a vector with `count = 2`, `blocklength = 1` and `stride = 3`. To send the correct
+> > column our send buffer was `&matrix[0][1]` which is the address of the first element in column 1. To see why the
+> > stride is 3, take a look at the diagram below,
+> >
+> > <img src="fig/stride_example_2x3.png" alt="Stride example for question" height="180"/>
+> >
+> > You can see that there are *three* contiguous elements between the start of each block of 1.
 > >
 > > ```c
 > > #include <mpi.h>
@@ -252,7 +291,7 @@ MPI_Recv(recv_buffer, 3, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 > ## Sending sub-arrays of an array
 >
-> By using a vector type, send the middle four elements (6, 7, 10, 11) in the following 4x4 matrix,
+> By using a vector type, send the middle four elements (6, 7, 10, 11) in the following 4 x 4 matrix,
 >
 > ```c
 > int matrix[4][4] = {
@@ -263,9 +302,6 @@ MPI_Recv(recv_buffer, 3, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 > };
 > ```
 >
-<!-- > ![Sub array](fig/vector_type_exercise.png) -->
->
->
 > > ## Solution
 > >
 > > The receiving rank(s) should receive the numbers 6, 7, 10 and 11 if your solution is correct. In the solution below,
@@ -273,10 +309,10 @@ MPI_Recv(recv_buffer, 3, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 > > arguments means two vectors of block length 2 will be sent. The stride of 4 results from that there are 4 elements
 > > between the start of each distinct block as shown in the image below,
 > >
-> > <img src="fig/stride_example.png" alt="Stride example for question" height="180"/>
+> > <img src="fig/stride_example_4x4.png" alt="Stride example for question" height="180"/>
 > >
 > > You must always remember to send the address for the starting point of the *first* block as the send buffer, which
-> > is why `&array[1][1]` is the first argument in `MPI_Ssend`.
+> > is why `&array[1][1]` is the first argument in `MPI_Send`.
 > >
 > > ```c
 > > #include <mpi.h>
