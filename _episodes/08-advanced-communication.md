@@ -89,6 +89,19 @@ we can see that the elements are no longer contiguous. Element `[0][1]` maps to 
 element `[1][1]` maps to the sixth element and so on. Elements in the same column but in a different row are separated
 by four other elements. In other words, elements in other rows are not contiguous.
 
+> ## Does memory contiguity affect performance?
+>
+> Based on what we have learned, do you think memory contiguity can impact the performance of our software?
+>
+> > ## Solution
+> >
+> > Yes, memory contiguity can affect how fast our programs run. When data is stored in a neat and organized way, the
+> > computer can find and use it quickly. But if the data is scattered around randomly (fragmented), it takes more time
+> > to locate and use it, which slows down our programs. So, keeping our data and data access patterns organized can
+> > make our programs faster. However, we probably won't notice the difference for small arrays and data structures.
+> {: .solution}
+{: .challenge}
+
 If we wanted to send all of the elements in row 1 of a 4 x 4 matrix, we can do something like this,
 
 ```c
@@ -142,7 +155,7 @@ int MPI_Type_vector(
    int blocklength,        /* the number of contiguous elements in a block */
    int stride,             /* the number of elements between the start of each block */
    MPI_Datatype oldtype,   /* the datatype of the elements of the vector, e.g. MPI_INT, MPI_FLOAT */
-   MPI_Datatype * newtype  /* the new datatype which represents the vector  - note that this is a pointer */
+   MPI_Datatype *newtype  /* the new datatype which represents the vector  - note that this is a pointer */
 );
 ```
 
@@ -162,7 +175,7 @@ custom datatype. Forgetting to do this step can lead to unexpected behaviour and
 
 ```c
 int MPI_Type_commit(
-   MPI_Datatype * datatype  /* the datatype to commit - note that this is a pointer */
+   MPI_Datatype *datatype  /* the datatype to commit - note that this is a pointer */
 );
 ```
 
@@ -173,7 +186,7 @@ free memory created with `malloc()`. To free up the resources, we use `MPI_Type_
 
 ```c
 int MPI_Type_free (
-   MPI_Datatype * datatype  /* the datatype to clean up -- note this is a pointer */
+   MPI_Datatype *datatype  /* the datatype to clean up -- note this is a pointer */
 );
 ```
 
@@ -387,4 +400,124 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 
 ## Structures in MPI
 
+```c
+struct MyStruct {
+   int id;
+   double value;
+}
+```
+
+```c
+int MPI_Type_create_struct(
+   int count,
+   int *array_of_blocklengths,
+   MPI_Aint *array_of_displacements,
+   MPI_Datatype *array_of_types,
+   MPI_Datatype *newtype,
+);
+```
+
+- array of displacements
+- storage format not defined by the language
+- e.g. some insert arbitrary padding between fields/elements
+
+<img src="fig/struct_memory_layout.png" alt="Memory layout for a struct" height="512">
+
+```c
+int MPI_Get_address{
+   const void *location,
+   MPI_Aint *address,
+};
+```
+
+```c
+struct MyStruct {
+   int id;
+   double value;
+} foo = {.id = 0, .value = 3.1459};
+
+int block_lengths[2] = {1, 1};
+MPI_Datatype block_types[2] = {MPI_INT, MPI_DOUBLE};
+
+MPI_Aint base_address;
+MPI_Aint block_offsets[2];
+MPI_Get_address(&foo, &base_address);
+MPI_Get_address(&foo.id, &block_offsets[0]);
+MPI_Get_address(&foo.value, &block_offsets[1]);
+for (int i = 0; i < 2; ++i) {
+   block_offsets[i] = MPI_Aint_diff(block_offsets[i], base_address);
+}
+
+MPI_Datatype struct_type;
+MPI_Type_create_struct(2, block_lengths, block_offsets, block_types, &struct_type);
+MPI_Type_commit(&struct_type);
+
+if (my_rank == 0) {
+   MPI_Send(&foo, 1, struct_type, 1, 0, MPI_COMM_WORLD);
+} else {
+   struct MyStruct recv_struct;
+   MPI_Recv(&recv_struct, 1, struct_type, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+}
+
+MPI_Type_free(&struct_type);
+```
+
+> ## Try sending a structure
+>
+> Write a small program to send the following struct from rank 0 to rank 1,
+>
+> ```c
+> struct Node {
+>     int id;
+>     char name[32];
+>     double temperature;
+> };
+>
+> struct Node node = { .id = 0, .name = "Dale Cooper", .temperature = 42};
+>```
+>
+> > ## Solution
+> >
+> {: .solution}
+{: .challenge}
+
+> ## A shortcut for calculating displacements
+>
+> ```c
+> MPI_Aint displacements;
+> block_offsets[0] = offsetof(struct MyStruct, id);
+> block_offsets[1] = offsetof(struct MyStruct, value);
+>```
+>
+{: .callout}
+
 ## Packing and unpacking memory
+
+MPI is really designed to use an array of structures rather than a structure of arrays.
+
+Using a derived type to represent a struct does not work if you have pointers in your structure. You have to do things
+manually then :-(
+
+```c
+int MPI_Pack(
+   const void *inbuf,
+   int incount,
+   MPI_Datatype datatype,
+   void *outbuf,
+   int outsize,
+   int *position,
+   MPI_Comm comm
+);
+```
+
+```c
+int MPI_Unpack(
+   const void *inbuf,
+   int insize,
+   int *position,
+   void *outbuf,
+   int outcount,
+   MPI_Datatype datatype,
+   MPI_Comm comm,
+);
+```
