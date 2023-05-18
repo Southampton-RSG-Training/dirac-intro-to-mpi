@@ -85,16 +85,16 @@ covered in detail in the following episodes).
 
 | Mode | Description | MPI Function |
 | - | - | - |
-| Synchronous | Returns control to the program when the message has been sent and received successfully | `MPI_Ssend` |
-| Buffered | Control is returned when the data has been copied into in the send buffer, regardless of the receive being completed or not | `MPI_Bsend` |
-| Standard  | Either buffered or synchronous, depending on the size of the data being sent and what your specific MPI implementation chooses to use | `MPI_Send` |
-| Ready | Will only return control if the receiving rank is already listening for a message | `MPI_Rsend` |
+| Synchronous | Returns control to the program when the message has been sent and received successfully | `MPI_Ssend()` |
+| Buffered | Control is returned when the data has been copied into in the send buffer, regardless of the receive being completed or not | `MPI_Bsend()` |
+| Standard  | Either buffered or synchronous, depending on the size of the data being sent and what your specific MPI implementation chooses to use | `MPI_Send()` |
+| Ready | Will only return control if the receiving rank is already listening for a message | `MPI_Rsend()` |
 
 In contrast to the four modes for sending data, receiving data only has one mode and therefore only a single function.
 
 | Mode |  Description | MPI Function |
 | - | - | - |
-| Receive | Returns control when data has been received successfully | `MPI_Recv` |
+| Receive | Returns control when data has been received successfully | `MPI_Recv()` |
 
 ### Blocking vs. non-blocking communication
 
@@ -111,8 +111,8 @@ crashed rank.
 
 > ## Avoiding communication deadlocks
 >
-> A common piece of advice in C is that when allocating memory using `malloc`, always write the accompanying call to
-> `free` to help avoid memory leaks by forgetting to deallocate the memory later. You can apply the same mantra to
+> A common piece of advice in C is that when allocating memory using `malloc()`, always write the accompanying call to
+> `free()` to help avoid memory leaks by forgetting to deallocate the memory later. You can apply the same mantra to
 > communication in MPI. When you send data, always write the code to receive the data as you may forget to later and
 > accidentally cause a deadlock.
 {: .callout}
@@ -181,7 +181,7 @@ Communication in MPI happens in something known as a *communicator*. We can thin
 being a collection of ranks which are able to exchange data with one another. What this means is that every
 communication between two (or more) ranks is linked to a specific communicator in the program. When we run an MPI
 application, the ranks will belong to the default communicator known as `MPI_COMM_WORLD`. We've seen this in earlier
-episodes when, for example, we've used functions like `MPI_Comm_rank` to get the rank number,
+episodes when, for example, we've used functions like `MPI_Comm_rank()` to get the rank number,
 
 ```c
 int my_rank;
