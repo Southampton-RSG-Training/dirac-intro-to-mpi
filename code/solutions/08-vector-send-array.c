@@ -42,5 +42,7 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
+    MPI_Type_free(&sub_array_t);
+
     return MPI_Finalize();
 }

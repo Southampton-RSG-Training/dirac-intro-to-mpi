@@ -42,11 +42,11 @@ values. However, we are limited in the size of array we can allocate as the dime
 time) and because memory for arrays defined this way are on the
 [stack](https://en.wikipedia.org/wiki/Stack-based_memory_allocation), which is limited on most systems.
 
-The other way is to use `malloc` to dynamically allocate memory on the
-[heap](https://en.wikipedia.org/wiki/Memory_management#HEAP) instead. The main advantage of `malloc` is that the heap is
-far larger than the stack so we can create larger arrays, and we can also dynamically set the size of arrays at run-time
-for different requirements. But it is a bit more tricky to use. To create a 3 x 3 matrix this way, we create an array of
-pointers (or pointers to pointers) as such:
+The other way is to use `malloc()` to dynamically allocate memory on the
+[heap](https://en.wikipedia.org/wiki/Memory_management#HEAP) instead. The main advantage of `malloc()` is that the heap
+is far larger than the stack so we can create larger arrays, and we can also dynamically set the size of arrays at
+run-time for different requirements. But it is a bit more tricky to use. To create a 3 x 3 matrix this way, we create an
+array of pointers (or pointers to pointers) as such:
 
 ```c
 float **matrix = malloc(3 * sizeof float);
@@ -103,9 +103,9 @@ We are not able do the same to send a column of the matrix, because the elements
 tried the same operation for `&matrix[0][1]` to send column 1, then elements `[0][1]`, `[0][2]`, `[0][3]` and `[1][0]`
 are sent (because those are contiguous) instead of `[0][1]`, `[1][1]`, `[2][1]` and `[3][1]`.
 
-> ## What about if I use `malloc`?
+> ## What about if I use `malloc()`?
 >
-> `malloc` *does not* guarantee contiguous memory when allocating multi-dimensional arrays (or pointer arrays). This
+> `malloc()` *does not* guarantee contiguous memory when allocating multi-dimensional arrays (or pointer arrays). This
 > makes life tricky to communicate them, since the communication functions in MPI assume the data we are communicating
 > is contiguous in memory. There are workarounds though. One workaround is to only work with 1D arrays (with the same
 > number of elements as the higher dimension array) and to map the multi-d coordinates into the 1D memory space. For
@@ -115,7 +115,7 @@ are sent (because those are contiguous) instead of `[0][1]`, `[1][1]`, `[2][1]` 
 > int index_for_2_4 = matrix1d[5 * 2 + 4];  // num_cols * row + col
 > ```
 >
-> Another solution is to use a clever function [`arralloc.c`](code/arralloc.c) which can allocate multi-dimensional
+> Another solution is to use a clever function [`arralloc()`](code/arralloc.c) which can allocate multi-dimensional
 > arrays into a single block of memory.
 >
 > ```c
@@ -157,12 +157,23 @@ elements within a block; in the above examples this is four. The *stride* is the
 block. When we define a vector, we create a datatype that includes one or more blocks of contiguous elements, with a
 regular spacing between them.
 
-Before we can use a vector, it has to first be committed using `MPI_Type_commit` which finalises the creation of a
+Before we can use a vector, it has to first be committed using `MPI_Type_commit()` which finalises the creation of a
 custom datatype. Forgetting to do this step can lead to unexpected behaviour and potentially disastrous consequences!
 
 ```c
 int MPI_Type_commit(
    MPI_Datatype * datatype  /* the datatype to commit - note that this is a pointer */
+);
+```
+
+When a datatype is committed, resources which represent and store information on how to handle it are internally
+allocated. This contains data structures such as memory buffers as well as data used for bookkeeping. Failing to free
+those resources after finishing with the vector vector leads to memory leaks, exactly the same as when we fail to
+free memory created with `malloc()`. To free up the resources, we use `MPI_Type_free()`,
+
+```c
+int MPI_Type_free (
+   MPI_Datatype * datatype  /* the datatype to clean up -- note this is a pointer */
 );
 ```
 
@@ -199,10 +210,13 @@ MPI_Send(&matrix[1][0], 1, rows_type, 1, 0, MPI_COMM_WORLD);
 const int num_elements = count * blocklength;
 int recv_buffer[num_elements];
 MPI_Recv(recv_buffer, num_elements, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+/* The final thing to do is to free the new datatype when we no longer need it */
+MPI_Type_free(&rows_type);
 ```
 
 There are two things above, which look quite innocent, but are actually vitally important. First of all, the send buffer
-in `MPI_Send` is not `matrix` but `&matrix[1][0]`. In `MPI_Send`, the send buffer is a pointer to the memory
+in `MPI_Send()` is not `matrix` but `&matrix[1][0]`. In `MPI_Send()`, the send buffer is a pointer to the memory
 location where the start of the data is stored. In the above example, the intention is to only send the second and forth
 rows, so the start location of the (contiguous) data is the memory address of element `[1][0]` instead. If we used
 `matrix`, the first and third row would be sent instead.
@@ -215,7 +229,7 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 
 > ## Sending columns from an array
 >
-> Create a vector type to send a column in the following 2 x 3 array,
+> Create a vector type to send a column in the following 2 x 3 array:
 >
 > ```c
 > int matrix[2][3] = {
@@ -281,6 +295,8 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 > >         printf("\n");
 > >     }
 > >
+> >     MPI_Type_free(&col_t);
+> >
 > >     return MPI_Finalize();
 > > }
 > > ```
@@ -291,7 +307,8 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 
 > ## Sending sub-arrays of an array
 >
-> By using a vector type, send the middle four elements (6, 7, 10, 11) in the following 4 x 4 matrix,
+> By using a vector type, send the middle four elements (6, 7, 10, 11) in the following 4 x 4 matrix from rank 0 to rank
+> 1:
 >
 > ```c
 > int matrix[4][4] = {
@@ -305,14 +322,14 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 > > ## Solution
 > >
 > > The receiving rank(s) should receive the numbers 6, 7, 10 and 11 if your solution is correct. In the solution below,
-> > we have created a `MPI_Type_vector` with a count and block length of 2 and with a stride of 4. The first two
+> > we have created a vector with a count and block length of 2 and with a stride of 4. The first two
 > > arguments means two vectors of block length 2 will be sent. The stride of 4 results from that there are 4 elements
 > > between the start of each distinct block as shown in the image below,
 > >
 > > <img src="fig/stride_example_4x4.png" alt="Stride example for question" height="180"/>
 > >
 > > You must always remember to send the address for the starting point of the *first* block as the send buffer, which
-> > is why `&array[1][1]` is the first argument in `MPI_Send`.
+> > is why `&array[1][1]` is the first argument in `MPI_Send()`.
 > >
 > > ```c
 > > #include <mpi.h>
@@ -358,6 +375,8 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 > >         }
 > >         printf("\n");
 > >     }
+> >
+> >     MPI_Type_free(&sub_array_t);
 > >
 > >     return MPI_Finalize();
 > > }
