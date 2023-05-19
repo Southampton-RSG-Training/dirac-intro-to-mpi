@@ -496,6 +496,65 @@ MPI_Type_free(&struct_type);
 >
 > > ## Solution
 > >
+> > ```c
+> > #include <mpi.h>
+> > #include <stdio.h>
+> >
+> > struct Node {
+> >     int id;
+> >     char name[16];
+> >     double temperature;
+> > };
+> >
+> > int main(int argc, char **argv)
+> > {
+> >     int my_rank;
+> >     int num_ranks;
+> >     MPI_Init(&argc, &argv);
+> >     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+> >     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+> >
+> >     if (num_ranks != 2) {
+> >         if (my_rank == 0) {
+> >             printf("This example only works with 2 ranks\n");
+> >         }
+> >         MPI_Abort(MPI_COMM_WORLD, 1);
+> >     }
+> >
+> >     struct Node node = {.id = 0, .name = "Dale Cooper", .temperature = 42};
+> >
+> >     int block_lengths[3] = {1, 16, 1};
+> >     MPI_Datatype block_types[3] = {MPI_INT, MPI_CHAR, MPI_DOUBLE};
+> >
+> >     MPI_Aint base_address;
+> >     MPI_Aint block_offsets[3];
+> >     MPI_Get_address(&node, &base_address);
+> >     MPI_Get_address(&node.id, &block_offsets[0]);
+> >     MPI_Get_address(&node.name, &block_offsets[1]);
+> >     MPI_Get_address(&node.temperature, &block_offsets[2]);
+> >     for (int i = 0; i < 3; ++i) {
+> >         block_offsets[i] = MPI_Aint_diff(block_offsets[i], base_address);
+> >     }
+> >
+> >     MPI_Datatype node_struct;
+> >     MPI_Type_create_struct(3, block_lengths, block_offsets, block_types, &node_struct);
+> >     MPI_Type_commit(&node_struct);
+> >
+> >     if (my_rank == 0) {
+> >         MPI_Send(&node, 1, node_struct, 1, 0, MPI_COMM_WORLD);
+> >     } else {
+> >         struct Node recv_node;
+> >         MPI_Recv(&recv_node, 1, node_struct, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+> >         printf("Received node: id = %d name = %s temperature %f\n", recv_node.id, recv_node.name,
+> >                recv_node.temperature);
+> >     }
+> >
+> >     MPI_Type_free(&node_struct);
+> >
+> >     return MPI_Finalize();
+> > }
+> > ```
+> >
 > {: .solution}
 {: .challenge}
 
@@ -548,6 +607,8 @@ manually then :-(
 Keep in mind that when packing and unpacking data with pointers, it's the data pointed to by the pointers that is being
 packed, not the pointers themselves.
 
+<img src="fig/packed_buffer_layout.png" alt="" height="180">
+
 ```c
 int MPI_Pack(
    const void *inbuf,
@@ -557,6 +618,15 @@ int MPI_Pack(
    int outsize,
    int *position,
    MPI_Comm comm
+);
+```
+
+```c
+int MPI_Pack_size(
+   int incount,
+   MPI_Datatype datatype,
+   MPI_Comm comm,
+   int *size
 );
 ```
 
@@ -612,8 +682,6 @@ int MPI_Unpack(
 > > #include <stdio.h>
 > > #include <stdlib.h>
 > >
-> > #define PACK_BUFFER_SIZE 50
-> >
 > > int main(int argc, char **argv)
 > > {
 > >     int my_rank, num_ranks;
@@ -632,22 +700,26 @@ int MPI_Unpack(
 > >         }
 > >     }
 > >
+> >     /* Calculate how big the MPI_Pack buffer should be */
+> >     int pack_buffer_size;
+> >     MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &pack_buffer_size);
+> >
 > >     if (my_rank == 0) {
 > >         /* Create the pack buffer and pack each row of data into it buffer
 > >            one by one */
 > >         int position = 0;
-> >         int *packed_data = malloc(PACK_BUFFER_SIZE * sizeof(int));
+> >         char *packed_data = malloc(pack_buffer_size * sizeof(char));
 > >         for (int i = 0; i < num_rows; ++i) {
-> >             MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, PACK_BUFFER_SIZE, &position, MPI_COMM_WORLD);
+> >             MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
 > >         }
 > >
 > >         /* Send the packed data to rank 1 and free memory we no longer need */
-> >         MPI_Send(packed_data, PACK_BUFFER_SIZE, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
+> >         MPI_Send(packed_data, pack_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
 > >         free(packed_data);
 > >     } else {
 > >         /* Create a receive buffer and get the packed buffer from rank 0 */
-> >         int *received_data = malloc(PACK_BUFFER_SIZE * sizeof(int));
-> >         MPI_Recv(received_data, PACK_BUFFER_SIZE, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+> >         char *received_data = malloc(pack_buffer_size * sizeof(char));
+> >         MPI_Recv(received_data, pack_buffer_size + 1, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 > >
 > >         /* allocate a matrix to put the receive buffer into -- this is for
 > >            demonstration purposes */
@@ -659,7 +731,7 @@ int MPI_Unpack(
 > >         /* Unpack the received data row by row into my_matrix */
 > >         int position = 0;
 > >         for (int i = 0; i < num_rows; ++i) {
-> >             MPI_Unpack(received_data, PACK_BUFFER_SIZE, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
+> >             MPI_Unpack(received_data, pack_buffer_size, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
 > >         }
 > >         free(received_data);
 > >

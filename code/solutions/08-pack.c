@@ -2,8 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define PACK_BUFFER_SIZE 50
-
 int main(int argc, char **argv)
 {
     int my_rank, num_ranks;
@@ -22,22 +20,26 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Calculate how big the MPI_Pack buffer should be */
+    int pack_buffer_size;
+    MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &pack_buffer_size);
+
     if (my_rank == 0) {
         /* Create the pack buffer and pack each row of data into it buffer
            one by one */
         int position = 0;
-        int *packed_data = malloc(PACK_BUFFER_SIZE * sizeof(int));
+        char *packed_data = malloc(pack_buffer_size * sizeof(char));
         for (int i = 0; i < num_rows; ++i) {
-            MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, PACK_BUFFER_SIZE, &position, MPI_COMM_WORLD);
+            MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
         }
 
         /* Send the packed data to rank 1 and free memory we no longer need */
-        MPI_Send(packed_data, PACK_BUFFER_SIZE, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
+        MPI_Send(packed_data, pack_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
         free(packed_data);
     } else {
         /* Create a receive buffer and get the packed buffer from rank 0 */
-        int *received_data = malloc(PACK_BUFFER_SIZE * sizeof(int));
-        MPI_Recv(received_data, PACK_BUFFER_SIZE, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        char *received_data = malloc(pack_buffer_size * sizeof(char));
+        MPI_Recv(received_data, pack_buffer_size + 1, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         /* allocate a matrix to put the receive buffer into -- this is for
            demonstration purposes */
@@ -49,7 +51,7 @@ int main(int argc, char **argv)
         /* Unpack the received data row by row into my_matrix */
         int position = 0;
         for (int i = 0; i < num_rows; ++i) {
-            MPI_Unpack(received_data, PACK_BUFFER_SIZE, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
+            MPI_Unpack(received_data, pack_buffer_size, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
         }
         free(received_data);
 
