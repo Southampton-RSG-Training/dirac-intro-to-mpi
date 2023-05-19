@@ -1,8 +1,8 @@
 ---
 title: Advanced Communication Techniques
 slug: "dirac-intro-to-mpi-advanced-communication"
-teaching: 15
-exercises: 15
+teaching: 20
+exercises: 30
 questions:
 - How do I use complex data structures in MPI?
 - What is contiguous memory, and why does it matter?
@@ -29,31 +29,16 @@ that using multi-dimensional arrays such for using matrices of tensors, or discr
 of points is fundamental to the software we write. But with the additional dimension comes additional complexity, not
 just in the code we write but also in how we communicate the extra data.
 
-To make sure we're all on the same page, there are two ways to define a multi-dimensional array in C. The first way is
-an extension of defining a 1D array. To create a *static* 2 x 3 matrix and initialize some values, we use the following
-syntax,
+Creating multi-dimensional arrays in C is simple and is no more complex than the syntax we've already seen in this
+lesson for creating 1D arrays. To create a 2 x 3 matrix and initialize it with some values, we use the following syntax,
 
 ```c
 int matrix[2][3] = { {1, 2, 3}, {4, 5, 6} };  // matrix[rows][cols]
 ```
 
-The same can be done for any arbitrary sized rectangular array and we also do not need to initialize the array with
-values. However, we are limited in the size of array we can allocate as the dimensions as static (usually at compile
-time) and because memory for arrays defined this way are on the
-[stack](https://en.wikipedia.org/wiki/Stack-based_memory_allocation), which is limited on most systems.
-
-The other way is to use `malloc()` to dynamically allocate memory on the
-[heap](https://en.wikipedia.org/wiki/Memory_management#HEAP) instead. The main advantage of `malloc()` is that the heap
-is far larger than the stack so we can create larger arrays, and we can also dynamically set the size of arrays at
-run-time for different requirements. But it is a bit more tricky to use. To create a 3 x 3 matrix this way, we create an
-array of pointers (or pointers to pointers) as such:
-
-```c
-float **matrix = malloc(3 * sizeof float);
-for (int i = 0; i < 3; ++i) {
-   matrix[i] = malloc(3 * sizeof float);
-}
-```
+Here, we have created an array with two rows and three columns. The first row contains the values `{1, 2, 3}` and the
+second row `{4, 5, 6}`. The number of rows and columns can be any value, as long as there is enough memory available to
+store it.
 
 ### The importance of memory contiguity
 
@@ -118,18 +103,40 @@ are sent (because those are contiguous) instead of `[0][1]`, `[1][1]`, `[2][1]` 
 
 > ## What about if I use `malloc()`?
 >
-> `malloc()` *does not* guarantee contiguous memory when allocating multi-dimensional arrays (or pointer arrays). This
-> makes life tricky to communicate them, since the communication functions in MPI assume the data we are communicating
-> is contiguous in memory. There are workarounds though. One workaround is to only work with 1D arrays (with the same
-> number of elements as the higher dimension array) and to map the multi-d coordinates into the 1D memory space. For
-> example, the element `[2][4]` in a a 3 x 5 matrix mapped in 1D would be accessed as,
+> More often than not, we will see `malloc()` being used to allocate memory for arrays. Especially if the code is using
+> an older standard such as C90, which does not support [variable length
+> arrays](https://en.wikipedia.org/wiki/Variable-length_array). To create a 2D array using `malloc()`, we  create an
+> array of pointers,
+>
+> ```c
+> int num_rows = 3, num_cols = 5;
+>
+> float **matrix = malloc(num_rows * sizeof(float*));  /* Each pointer is the start of a row */
+> for (int i = 0; i < num_rows; ++i) {
+>    matrix[i] = malloc(num_cols * sizeof(float));     /* Here we allocate memory to store the  elements for row i */
+> }
+>
+> for (int i = 0; i < num_rows; ++i) {
+>    for (int j = 0; i < num_cols; ++j) {
+>       matrix[i][j] = 3.14159;                        /* We index as usual */
+>    }
+> }
+> ```
+>
+> There is one problem though. `malloc()` *does not* guarantee contiguous memory when allocating multi-dimensional
+> arrays like this. When `malloc()` requests memory, the operating system will assign whatever memory is free. This is
+> not always next to the block of memory from the previous allocation. This makes life tricky to communicate them, since
+> the communication functions require data to be contiguous in memory. There are workarounds though. One workaround is
+> to only work with 1D arrays (with the same number of elements as the higher dimension array) and to map the multi-d
+> coordinates into the 1D memory space. For example, the element `[2][4]` in a a 3 x 5 matrix mapped in 1D would be
+> accessed as,
 >
 > ```c
 > int index_for_2_4 = matrix1d[5 * 2 + 4];  // num_cols * row + col
 > ```
 >
-> Another solution is to use a clever function [`arralloc()`](code/arralloc.c) which can allocate multi-dimensional
-> arrays into a single block of memory.
+> Another solution is to use a clever function such as [`arralloc()`](code/arralloc.c) (which is not part of the
+> standard library) which allocates multi-dimensional arrays into a single block of memory.
 >
 > ```c
 > int **matrix = arralloc(sizeof int, 2, 5);
@@ -400,12 +407,23 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 
 ## Structures in MPI
 
+Structures, commonly known as structs, are used to create custom datatypes that can hold multiple variables of
+different types. They are particularly useful for organising related data. In scientific applications, structs find
+frequent use in data orginisation, such as grouping together constants and global variables, as well as representing
+physical things like particles or more abstract concepts such as a grid cell. By using structs, we can write clearer,
+more concise and better structure code.
+
 ```c
-struct MyStruct {
-   int id;
-   double value;
+struct GridCell {
+   int index;
+   double position[3];
+   double velocity[3];
+   double temperature;
 }
 ```
+
+When we create a struct, the memory for it is allocated in a single contiguous block. Each field, or member, of the struct exists
+at some offset from the *base location* of the struct.
 
 ```c
 int MPI_Type_create_struct(
@@ -421,14 +439,14 @@ int MPI_Type_create_struct(
 - storage format not defined by the language
 - e.g. some insert arbitrary padding between fields/elements
 
-<img src="fig/struct_memory_layout.png" alt="Memory layout for a struct" height="512">
-
 ```c
 int MPI_Get_address{
    const void *location,
    MPI_Aint *address,
 };
 ```
+
+<img src="fig/struct_memory_layout.png" alt="Memory layout for a struct" height="512">
 
 ```c
 struct MyStruct {
@@ -462,7 +480,7 @@ if (my_rank == 0) {
 MPI_Type_free(&struct_type);
 ```
 
-> ## Try sending a structure
+> ## Sending a struct
 >
 > Write a small program to send the following struct from rank 0 to rank 1,
 >
@@ -481,6 +499,35 @@ MPI_Type_free(&struct_type);
 > {: .solution}
 {: .challenge}
 
+> ## What if I have a pointer in my struct?
+>
+> Suppose we have the following struct with a pointer named `position` and some other fields,
+>
+> ```c
+> struct Grid {
+>     double *position;
+>     int num_cells;
+> };
+> grid.position = malloc(5 * sizeof(double));
+>```
+>
+> If we use `malloc()` to allocate memory for `position`, how would we send data in the struct and the memory we
+> allocated one rank to another? If you are unsure, try writing a short program to create a derived type for the struct.
+>
+> > ## Solution
+> >
+> > The short answer is that we can't do it using a derived type, and will have to *manually* communicate the data
+> > separately. The reason why can't use a derived type is because the address of `*position` is the address of the
+> > pointer. The offset between `num_cells` and `*position` is the size of the pointer and whatever padding the compiler
+> > adds. The memory we allocated somewhere else in the memory, as shown in the diagram below.
+> >
+> > <img src="fig/struct_with_pointer.png" alt="Memory layout for a struct with a pointer" height="320">
+> >
+> >
+> {: .solution}
+>
+{: .challenge}
+
 > ## A shortcut for calculating displacements
 >
 > ```c
@@ -497,6 +544,9 @@ MPI is really designed to use an array of structures rather than a structure of 
 
 Using a derived type to represent a struct does not work if you have pointers in your structure. You have to do things
 manually then :-(
+
+Keep in mind that when packing and unpacking data with pointers, it's the data pointed to by the pointers that is being
+packed, not the pointers themselves.
 
 ```c
 int MPI_Pack(
@@ -521,3 +571,121 @@ int MPI_Unpack(
    MPI_Comm comm,
 );
 ```
+
+> ## Sending non-contiguous blocks with `MPI_Pack` and `MPI_Unpack`
+>
+> ```c
+> #include <stdio.h>
+> #include <stdlib.h>
+>
+> int main(int argc, char **argv)
+> {
+>    int num_rows = 3, num_cols = 3;
+>
+>    // Allocate and initialize a 2D array with the number of the element
+>    int **matrix = malloc(num_rows * sizeof(int *));
+>    for (int i = 0; i < num_rows; ++i) {
+>       matrix[i] = malloc(num_cols * sizeof(int));
+>       for (int j = 0; i < num_cols; ++j) {
+>          matrix[i][j] = num_cols * i + j;
+>       }
+>    }
+>
+>    /*
+>     * Add your code here
+>     */
+>
+>    // Free all the memory for matrix
+>    for (int i = 0; i < num_rows; ++i) {
+>       free(matrix[i]);
+>    }
+>    free(matrix);
+>
+>    return 0;
+> }
+> ```
+>
+> > ## Solution
+> >
+> > ```c
+> > #include <mpi.h>
+> > #include <stdio.h>
+> > #include <stdlib.h>
+> >
+> > #define PACK_BUFFER_SIZE 50
+> >
+> > int main(int argc, char **argv)
+> > {
+> >     int my_rank, num_ranks;
+> >     MPI_Init(&argc, &argv);
+> >     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+> >     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+> >
+> >     int num_rows = 3, num_cols = 3;
+> >
+> >     /* Allocate and initialize a 2D array with the number of the element */
+> >     int **matrix = malloc(num_rows * sizeof(int *));
+> >     for (int i = 0; i < num_rows; ++i) {
+> >         matrix[i] = malloc(num_cols * sizeof(int));
+> >         for (int j = 0; j < num_cols; ++j) {
+> >             matrix[i][j] = num_cols * i + j;
+> >         }
+> >     }
+> >
+> >     if (my_rank == 0) {
+> >         /* Create the pack buffer and pack each row of data into it buffer
+> >            one by one */
+> >         int position = 0;
+> >         int *packed_data = malloc(PACK_BUFFER_SIZE * sizeof(int));
+> >         for (int i = 0; i < num_rows; ++i) {
+> >             MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, PACK_BUFFER_SIZE, &position, MPI_COMM_WORLD);
+> >         }
+> >
+> >         /* Send the packed data to rank 1 and free memory we no longer need */
+> >         MPI_Send(packed_data, PACK_BUFFER_SIZE, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
+> >         free(packed_data);
+> >     } else {
+> >         /* Create a receive buffer and get the packed buffer from rank 0 */
+> >         int *received_data = malloc(PACK_BUFFER_SIZE * sizeof(int));
+> >         MPI_Recv(received_data, PACK_BUFFER_SIZE, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+> >
+> >         /* allocate a matrix to put the receive buffer into -- this is for
+> >            demonstration purposes */
+> >         int **my_matrix = malloc(num_rows * sizeof(int *));
+> >         for (int i = 0; i < num_cols; ++i) {
+> >             my_matrix[i] = malloc(num_cols * sizeof(int));
+> >         }
+> >
+> >         /* Unpack the received data row by row into my_matrix */
+> >         int position = 0;
+> >         for (int i = 0; i < num_rows; ++i) {
+> >             MPI_Unpack(received_data, PACK_BUFFER_SIZE, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
+> >         }
+> >         free(received_data);
+> >
+> >         /* Print the elements of my_matrix */
+> >         printf("Rank 1 received the following array:\n");
+> >         for (int i = 0; i < num_rows; ++i) {
+> >             for (int j = 0; j < num_cols; ++j) {
+> >                 printf(" %d", my_matrix[i][j]);
+> >             }
+> >             printf("\n");
+> >         }
+> >         for (int i = 0; i < num_rows; ++i) {
+> >             free(my_matrix[i]);
+> >         }
+> >         free(my_matrix);
+> >     }
+> >
+> >     /* Free all the memory for matrix */
+> >     for (int i = 0; i < num_rows; ++i) {
+> >         free(matrix[i]);
+> >     }
+> >     free(matrix);
+> >
+> >     return MPI_Finalize();
+> > }
+> > ```
+> >
+> {: .solution}
+{: .challenge}
