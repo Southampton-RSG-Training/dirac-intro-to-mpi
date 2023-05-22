@@ -259,7 +259,39 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 >```
 >
 > With that vector type, send the middle column of the matrix (elements `matrix[0][1]` and `matrix[1][1]`) from
-> rank 0 to rank 1 and print the results.
+> rank 0 to rank 1 and print the results. You may want to use this code as your starting point,
+>
+> ```c
+> #include <mpi.h>
+> #include <stdio.h>
+>
+> int main(int argc, char **argv)
+> {
+>    int my_rank;
+>    int num_ranks;
+>    MPI_Init(&argc, &argv);
+>    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+>    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+>
+>    int matrix[2][3] = {
+>       {1, 2, 3},
+>       {4, 5, 6},
+>    };
+>
+>    if (num_ranks != 2) {
+>       if (my_rank == 0) {
+>          printf("This example only works with 2 ranks\n");
+>       }
+>       MPI_Abort(MPI_COMM_WORLD, 1);
+>    }
+>
+>    /*
+>     * Your code goes here
+>     */
+>
+>    return MPI_Finalize();
+> }
+> ```
 >
 > > ## Solution
 > >
@@ -328,7 +360,7 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 > ## Sending sub-arrays of an array
 >
 > By using a vector type, send the middle four elements (6, 7, 10, 11) in the following 4 x 4 matrix from rank 0 to rank
-> 1:
+> 1,
 >
 > ```c
 > int matrix[4][4] = {
@@ -338,6 +370,9 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 >   {13, 14, 15, 16}
 > };
 > ```
+>
+> You can re-use the skeleton from the previous as your starting point, replacing the 2 x 3 matrix with the 4 x 4 matrix
+> above.
 >
 > > ## Solution
 > >
@@ -407,11 +442,15 @@ of the (non-contiguous) data like we do when we are sending it. We are really ju
 
 ## Structures in MPI
 
-Structures, commonly known as structs, are used to create custom datatypes that can hold multiple variables of
-different types. They are particularly useful for organising related data. In scientific applications, structs find
-frequent use in data orginisation, such as grouping together constants and global variables, as well as representing
-physical things like particles or more abstract concepts such as a grid cell. By using structs, we can write clearer,
-more concise and better structure code.
+Structures, commonly known as structs, are custom datatypes that hold multiple variables of different types which makes
+them particularly useful for organising related data. Common use cases of  structs in scientific code are to group
+together constants or global variables, and to represent a physical thing such as particles or even to represent more
+abstract entities such as a spatially discretised grid. Through the use of structs, we can write clearer, more concise
+and better structure code.
+
+Given the advantages and wide usage of structs, MPI
+
+It stands to reason that that MPI should support reasy
 
 ```c
 struct GridCell {
@@ -424,6 +463,8 @@ struct GridCell {
 
 When we create a struct, the memory for it is allocated in a single contiguous block. Each field, or member, of the struct exists
 at some offset from the *base location* of the struct.
+
+The compiler adds padding to *align* the members in a struct, to optimize memory access and improve performance.
 
 ```c
 int MPI_Type_create_struct(
