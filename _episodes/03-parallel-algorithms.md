@@ -7,11 +7,16 @@ questions:
 - What do we mean by "parallel"?
 - Which parts of a program are amenable to parallelisation?
 - How do we characterise the classes of problems to which parallelism can be applied?
+- How should I approach parallelising my program?
 objectives:
 - Learn and understand different parallel paradigms and algorithm design.
 - Describe the differences between the data parallelism and message passing paradigms.
-- Learn how to split work across CPUs using MPI.
+- Use MPI to coordinate the use of multiple processes across CPUs.
 keypoints:
+- Many problems can be distributed across several processors and solved faster.
+- Algorithms can have both parallelisable and non-parallelisable sections.
+- There are two major parallelisation paradigms: data parallelism and message passing.
+- MPI implements the Message Passing paradigm, and OpenMP implements data parallelism.
 - By default, the order in which operations are run between parallel MPI processes is arbitrary.
 ---
 
@@ -385,6 +390,8 @@ matrices into smaller submatrices and composes the result from
 multiplications of the submatrices.  If there are four ranks, the
 matrix is divided into four submatrices.
 
+TODO: consider build support for matrix rendering
+
 $$ A = \left[ \begin{array}{cc}A_{11} & A_{12} \\ A_{21} & A_{22}\end{array} \right] $$
 
 $$ B = \left[ \begin{array}{cc}B_{11} & B_{12} \\ B_{21} & B_{22}\end{array} \right] $$
@@ -468,6 +475,8 @@ int main(int argc, char** argv) {
 ~~~
 {: .language-c}
 
+TODO: consider getting COMM_size to example above, adding to printf
+
 > ## Compile and Run
 >
 > Compile the above C code with `mpicc`, then run the code with `mpirun`. You may find the output for
@@ -475,6 +484,12 @@ int main(int argc, char** argv) {
 >
 > > ## Solution
 > > 
+> > ~~~
+> > mpicc mpi_rank.c -o mpi_rank
+> > mpirun -n 4 mpi_rank
+> > ~~~
+> > {: .language-bash}
+> >
 > > You should see something like (although the ordering may be different):
 > > 
 > > ~~~

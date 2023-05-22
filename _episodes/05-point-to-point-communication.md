@@ -356,6 +356,8 @@ TODO: add in use and example of MPI_Sendrecv combined function
 >{: .solution}
 {: .challenge}
 
+TODO: consider switching exercise below to using Ed's example blocking code (in Google Drive) which is simpler
+
 > ## Blocking
 >
 > Try the code below and see what happens. How would you change the code to fix the problem? 
