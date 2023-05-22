@@ -18,3 +18,6 @@ vendor/
 .idea/
 venv/
 .venv/
+.vscode
+setup.md
+_includes/
