@@ -258,41 +258,9 @@ blocklength` integers.
 >  };
 >```
 >
-> With that vector type, send the middle column of the matrix (elements `matrix[0][1]` and `matrix[1][1]`) from
-> rank 0 to rank 1 and print the results. You may want to use this code as your starting point,
->
-> ```c
-> #include <mpi.h>
-> #include <stdio.h>
->
-> int main(int argc, char **argv)
-> {
->    int my_rank;
->    int num_ranks;
->    MPI_Init(&argc, &argv);
->    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
->    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
->
->    if (num_ranks != 2) {
->       if (my_rank == 0) {
->          printf("This example only works with 2 ranks\n");
->       }
->       MPI_Abort(MPI_COMM_WORLD, 1);
->    }
->
->    int matrix[2][3] = {
->        {1, 2, 3},
->        {4, 5, 6},
->     };
->
->     /*
->      * Your code goes here
->      */
->
->     return MPI_Finalize();
-> }
->
-> ```
+> With that vector type, send the middle column of the matrix (elements `matrix[0][1]` and `matrix[1][1]`) from rank 0
+> to rank 1 and print the results. You may want to use [this code](code/solutions/skeleton-example.c) as your starting
+> point.
 >
 > > ## Solution
 > >
@@ -372,8 +340,8 @@ blocklength` integers.
 > };
 > ```
 >
-> You can re-use the skeleton from the previous as your starting point, replacing the 2 x 3 matrix with the 4 x 4 matrix
-> above.
+> You can re-use the skeleton from the previous exercise as your starting point, replacing the 2 x 3 matrix with the 4 x
+> 4 matrix above and modifying the vector type and communication functions as required.
 >
 > > ## Solution
 > >
@@ -444,7 +412,7 @@ blocklength` integers.
 ## Structures in MPI
 
 Structures, commonly known as structs, are custom datatypes which cotain multiple variables of different types. Some
- common use cases of structs, in scientific code, include grouping together constants or global variables, or are used
+common use cases of structs, in scientific code, include grouping together constants or global variables, or are used
 to represent a physical thing, such as a particle, or something more abstract like a cell on a simulation grid. When we
 use structs, we can write clearer, more concise and better structured code.
 
@@ -546,7 +514,7 @@ MPI_Type_free(&struct_type);
 
 > ## Sending a struct
 >
-> Write a small program to send the following struct from rank 0 to rank 1,
+> By using a derived data type, write a program to send the following struct `struct Node node`,
 >
 > ```c
 > struct Node {
@@ -558,7 +526,13 @@ MPI_Type_free(&struct_type);
 > struct Node node = { .id = 0, .name = "Dale Cooper", .temperature = 42};
 >```
 >
+> from one rank to another. You may wish to use [this skeleton code](code/solutions/skeleton-example.c) as your starting
+> point.
+>
 > > ## Solution
+> >
+> > Your solution should look something like the code block below. When sending a *static* array (`name[16]`), we have
+> > to use a count of 16 in the `block_lengths` array for that member.
 > >
 > > ```c
 > > #include <mpi.h>
