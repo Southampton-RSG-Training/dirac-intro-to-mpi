@@ -640,18 +640,18 @@ MPI_Type_free(&struct_type);
 
 ## Packing and unpacking memory
 
-The previous two sections have covered how we might communicate complex, but structured data between ranks using derived
-datatypes.
+The previous two sections covered how to communicate complex, but structured data between ranks using derived datatypes.
+But we don't always have data which fits into the assumptions for a derived type. For example, in the last exercise
+we've seen that pointers and struct derived types don't mix, and we've also seen that, without some pointer magic,
+allocating arbitrary n-dimensional arrays using `malloc()` does not always return a contiguous block of memory.
 
-MPI is really designed to use an array of structures rather than a structure of arrays.
-
-Using a derived type to represent a struct does not work if you have pointers in your structure. You have to do things
-manually then :-(
+- last case scenario, but can lead to less communication calls
+- derived types more efficient - packing using more memory
 
 Keep in mind that when packing and unpacking data with pointers, it's the data pointed to by the pointers that is being
 packed, not the pointers themselves.
 
-<img src="fig/packed_buffer_layout.png" alt="" height="180">
+![Layout of packed memory](fig/packed_buffer_layout.png)
 
 ```c
 int MPI_Pack(
@@ -685,6 +685,14 @@ int MPI_Unpack(
    MPI_Comm comm,
 );
 ```
+
+> ## What if the other rank doesn't know the size of the buffer?
+>
+> ```c
+> MPI_Probe()
+>```
+>
+{: .callout}
 
 > ## Sending non-contiguous blocks with `MPI_Pack` and `MPI_Unpack`
 >
