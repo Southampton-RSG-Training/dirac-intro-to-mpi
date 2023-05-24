@@ -121,16 +121,9 @@ elements in other rows are not contiguous.
 > int index_for_2_4 = matrix1d[5 * 2 + 4];  // num_cols * row + col
 > ```
 >
-> Another solution is to move memory around, such as by using a clever function such as [`arralloc()`](code/arralloc.c)
-> (which is not part of the standard library) which can allocate multi-dimensional arrays into a single block of memory.
-<!-- >
-> ```c
-> int **matrix = arralloc(sizeof int, 2, 5);
-> /* To send an arralloc'd array, we need to pass the address of the first element to MPI functions */
-> MPI_Send(&matrix[0][0], 2 * 5, MPI_INT, ...);
-> /* The pointer is free'd as you would free a 1d array */
-> free(matrix);
-> ``` -->
+> Another solution is to move memory around, such as in [this example](code/examples/08-malloc-trick.c) or by using a
+> more sophisticated method such as the [`arralloc()` function](code/arralloc.c) (not part of the standard library)
+> which can allocate arbitrary n-dimensional arrays into a contiguous block.
 >
 {: .callout}
 
@@ -340,8 +333,8 @@ blocklength` integers.
 > };
 > ```
 >
-> You can re-use the skeleton from the previous exercise as your starting point, replacing the 2 x 3 matrix with the 4 x
-> 4 matrix above and modifying the vector type and communication functions as required.
+> You can re-use most of your code from the previous exercise as your starting point, replacing the 2 x 3 matrix with
+> the 4 x 4 matrix above and modifying the vector type and communication functions as required.
 >
 > > ## Solution
 > >
@@ -514,7 +507,8 @@ MPI_Type_free(&struct_type);
 
 > ## Sending a struct
 >
-> By using a derived data type, write a program to send the following struct `struct Node node`,
+> By using a derived data type, write a program to send the following struct `struct Node node` from one rank to
+> another,
 >
 > ```c
 > struct Node {
@@ -526,8 +520,7 @@ MPI_Type_free(&struct_type);
 > struct Node node = { .id = 0, .name = "Dale Cooper", .temperature = 42};
 >```
 >
-> from one rank to another. You may wish to use [this skeleton code](code/solutions/skeleton-example.c) as your starting
-> point.
+> You may wish to use [this skeleton code](code/solutions/skeleton-example.c) as your stating point.
 >
 > > ## Solution
 > >
@@ -628,8 +621,8 @@ MPI_Type_free(&struct_type);
 > ## A different way to calculate displacements
 >
 > There are other ways to calculate the displacement, other than using what MPI provides for us. Another common way is
-> to use the macro `offsetof()` macro part of `<stddef.h>`. `offsetof()` two arguments, the first being the struct type
-> and the second being the member to calculate the offset for.
+> to use the macro `offsetof()` macro part of `<stddef.h>`. `offsetof()` accepts two arguments, the first being the
+> struct type and the second being the member to calculate the offset for.
 >
 > ```c
 > #include <stddef.h>
@@ -638,12 +631,17 @@ MPI_Type_free(&struct_type);
 > displacements[1] = (MPI_Aint) offsetof(struct MyStruct, value);
 >```
 >
-> This method and  the other outlined previously returns the same displacement, so it's mostly a personal choice which
-> you want to use.
+> This method and the other shown in the previous examples both returns the same displacement values. It's mostly a
+> personal choice which you choose to use. Some people prefer the "safety" of using `MPI_Get_address()` whilst others
+> prefer to write more concise code with `offsetof()`. Of course, if you're a Fortran programmer then you can't use the
+> macro
 >
 {: .callout}
 
 ## Packing and unpacking memory
+
+The previous two sections have covered how we might communicate complex, but structured data between ranks using derived
+datatypes.
 
 MPI is really designed to use an array of structures rather than a structure of arrays.
 
