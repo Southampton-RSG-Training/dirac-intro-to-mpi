@@ -26,6 +26,17 @@ To help with this, MPI provides an interface to create new types known as *deriv
 As a set of instructions which enable the translation of complex data structures into instructions, for MPI, for
 efficient data communication.
 
+> ## Size limitations for messages
+>
+> Throughout MPI, the number of elements in a message is defined using an integer: `int count`. In most 64-bit Linux
+> systems, `int`'s are usually 32-bit and so the biggest number that `count` can be is `2^31 - 1 = 2,147,483,647`. If
+> an array exceeds this number of elements, then it cant be easily communicated because of this limitation. At least
+> until "large count" support is added to the version/implementation of MPI you use (support is in the MPI 4.0
+> standard), there are two workarounds workarounds. These are to either send the array in smaller chunks, or to use a
+> derived type.
+>
+{: .callout}
+
 ## Working with multi-dimensional arrays
 
 Almost all scientific and computing problems nowadays require us to think with more than one dimensional data. Using
@@ -513,7 +524,7 @@ MPI_Type_free(&struct_type);
 > ```c
 > struct Node {
 >     int id;
->     char name[32];
+>     char name[16];
 >     double temperature;
 > };
 >
@@ -638,96 +649,168 @@ MPI_Type_free(&struct_type);
 >
 {: .callout}
 
-## Packing and unpacking memory
+## Dealing with other non-contiguous data
 
-The previous two sections covered how to communicate complex, but structured data between ranks using derived datatypes.
-But we don't always have data which fits into the assumptions for a derived type. For example, in the last exercise
-we've seen that pointers and struct derived types don't mix, and we've also seen that, without some pointer magic,
-allocating arbitrary n-dimensional arrays using `malloc()` does not always return a contiguous block of memory.
+The previous two sections covered how to communicate complex, but structured, data between ranks using derived
+datatypes. But there are always edge cases which do not necessarily fit into the scope of a derived type.  For example,
+in the last exercise, we've seen that non-contiguous memory, pointers and derived types don't mix well. Large messages
+are also difficult to deal with on versions older than MPI 4.0. Furthermore, we may can also reach performance
+bottlenecks when working with heterogeneous data which doesn't fit, or doesn't make sense to be, in a derived type, as
+each type, or even piece of data, needs to be communicated in separate steps. For situations like this, we can use
+`MPI_Pack()` and `MPI_Unpack()`.
 
-- last case scenario, but can lead to less communication calls
-- derived types more efficient - packing using more memory
-
-Keep in mind that when packing and unpacking data with pointers, it's the data pointed to by the pointers that is being
-packed, not the pointers themselves.
+Both `MPI_Pack()` and `MPI_Unpack()` are methods for manually arranging and unpacking data element into a contiguous
+buffer, for improved communication efficiency and for cases where regular methods don't fit. We can also create
+self-documenting communications using `MPI_Pack()`, where the packed data contains additional elements which contains
+information describing the structure and content of the remaining data. However, using packed buffers comes with
+additional overheads, in the form of increased memory usage and potentially more communication overheads as packing and
+unpacking data is not free.
 
 ![Layout of packed memory](fig/packed_buffer_layout.png)
 
 ```c
 int MPI_Pack(
-   const void *inbuf,
-   int incount,
-   MPI_Datatype datatype,
-   void *outbuf,
-   int outsize,
-   int *position,
-   MPI_Comm comm
+   const void *inbuf,      /* the input buffer */
+   int incount,            /* the number of items to be packed */
+   MPI_Datatype datatype,  /* the data type of the items to be packed */
+   void *outbuf,           /* the packed buffer */
+   int outsize,            /* the size of the packed buffer */
+   int *position,          /* current position in the packed buffer */
+   MPI_Comm comm           /* the communicator for the packed message */
 );
 ```
 
 ```c
 int MPI_Pack_size(
-   int incount,
-   MPI_Datatype datatype,
-   MPI_Comm comm,
-   int *size
+   int incount,            /* the number of elements in the buffer */
+   MPI_Datatype datatype,  /* the data type */
+   MPI_Comm comm,          /* the communicator */
+   int *size               /* the upper limit for the size of a packed buffer */
 );
 ```
 
 ```c
 int MPI_Unpack(
-   const void *inbuf,
-   int insize,
-   int *position,
-   void *outbuf,
-   int outcount,
-   MPI_Datatype datatype,
-   MPI_Comm comm,
+   const void *inbuf,      /* the packed buffer */
+   int insize,             /* the size of the packed buffer */
+   int *position,          /* current position in the packed buffer */
+   void *outbuf,           /* where the unpacked stuff will go */
+   int outcount,           /* how many things to get from the buffer */
+   MPI_Datatype datatype,  /* the data type of the packed elements to get */
+   MPI_Comm comm,          /* the communicator for the packed message */
 );
 ```
 
+```c
+/* Allocate and initialise a (non-contiguous) 2D matrix that we will pack into
+a buffer */
+int num_rows = 3, num_cols = 3;
+int **matrix = malloc(num_rows * sizeof(int *));
+for (int i = 0; i < num_rows; ++i) {
+   matrix[i] = malloc(num_cols * sizeof(int));
+   for (int j = 0; i < num_cols; ++j) {
+      matrix[i][j] = num_cols * i + j;
+   }
+}
+
+/* Determine the upper limit for the amount of memory the buffer requires. Since
+this is a simple situation, we could probably have done this manually using
+`num_rows * num_cols * sizeof(int)`. The size `max_buffer_size` is returned in
+bytes */
+int max_buffer_size;
+MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &max_buffer_size);
+
+/* The buffer we are packing into has to be allocated, note that it is a
+char* array. That's because a char is 1 byte and packing and unpacking works in
+bytes */
+char *packed_data = malloc(max_buffer_size);
+
+/* Pack each (non-contiguous) row into the packed buffer */
+int position = 0;
+for (int i = 0; i < num_rows; ++i) {
+   MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
+}
+
+/* Send the packed data to rank 1. To send a packed array, we use the MPI_PACKED
+datatype */
+MPI_Send(packed_data, max_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
+
+/* To receive packed data, we have to allocate another buffer and receive
+MPI_PACKED elements into it */
+char *received_data = malloc(max_buffer_size);
+MPI_Recv(received_data, max_buffer_size, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+/* Once we have the packed buffer, we can then unpack the data into the rows
+of my_matrix */
+int position = 0;
+int my_matrix[num_rows][num_cols];
+for (int i = 0; i < num_rows; ++i) {
+   MPI_Unpack(received_data, max_buffer_size, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
+}
+```
+
+> ## Blocking or non-blocking?
+>
+> The processes of packing data into a contiguous buffer cannot happens asynchronously. The same goes for unpacking
+> data. But this doesn't mean that the packed data has to be sent or received using blocking communication methods. The
+> packed data is a contiguous memory buffer, so it can be sent and received using any the communication functions in
+> MPI. The example above uses blocking communication functions, but it would work with non-blocking communication also.
+>
+{: .callout}
+
 > ## What if the other rank doesn't know the size of the buffer?
 >
+> In some cases, the receiving rank may not know the size of the buffer used in `MPI_Pack()`. This could happen if a
+> message is sent and received in different functions, if some ranks have different branches through the program
+> or if communication happens in a dynamic or non-sequential way.
+>
+> In these situations, we can use `MPI_Probe()` and `MPI_Get_count` to find the a message being sent and to get the
+> number of elements in the message.
+>
 > ```c
-> MPI_Probe()
+> /* First probe for a message, to get the status of it */
+> MPI_Status status;
+> MPI_Probe(0, 0, MPI_COMM_WORLD, &status);
+> /* Using MPI_Get_count we can get the number of elements of a particular data type */
+> int message_size;
+> MPI_Get_count(&status, MPI_PACKED, &buffer_size);
+> /* MPI_PACKED represents an element of a "byte stream." So, buffer_size is the size of the buffer to allocate */
+> char *buffer = malloc(buffer_size);
 >```
 >
 {: .callout}
 
-> ## Sending non-contiguous blocks with `MPI_Pack` and `MPI_Unpack`
+> ## Sending heterogeneous data in a single communication
+>
+> Suppose we have two arrays below, where one contains integer data and the other floating point data. Normally we would
+> use multiple communication calls to send each type of data individually, for a known number of elements. For this
+> exercise, communicate both arrays using a packed memory buffer.
 >
 > ```c
-> #include <stdio.h>
-> #include <stdlib.h>
+> int int_data_count = 5;
+> int float_data_count = 10;
 >
-> int main(int argc, char **argv)
-> {
->    int num_rows = 3, num_cols = 3;
+> int   *int_data = malloc(int_data_count * sizeof(int));
+> float *float_data = malloc(float_data_count * sizeof(float));
 >
->    // Allocate and initialize a 2D array with the number of the element
->    int **matrix = malloc(num_rows * sizeof(int *));
->    for (int i = 0; i < num_rows; ++i) {
->       matrix[i] = malloc(num_cols * sizeof(int));
->       for (int j = 0; i < num_cols; ++j) {
->          matrix[i][j] = num_cols * i + j;
->       }
->    }
->
->    /*
->     * Add your code here
->     */
->
->    // Free all the memory for matrix
->    for (int i = 0; i < num_rows; ++i) {
->       free(matrix[i]);
->    }
->    free(matrix);
->
->    return 0;
+> /* Initialize the arrays with some values */
+> for (int i = 0; i < int_data_count; ++i) {
+>   int_data[i] = i + 1;
+> }
+> for (int i = 0; i < float_data_count; ++i) {
+>   float_data[i] = 3.14159 * (i + 1);
 > }
 > ```
 >
+> Since the arrays are dynamically allocated, in rank 0, you should also pack the number of elements in each array. Rank
+> 1 may also not know the size of the buffer. How would you deal with that?
+>
+> You can use this [skeleton code](code/solutions/08-pack-skeleton.c) to begin with.
+>
 > > ## Solution
+> >
+> > The additional restrictions for rank 1 not knowing the size of the arrays or packed buffer add some complexity to
+> > receiving the packed buffer from rank 0.
 > >
 > > ```c
 > > #include <mpi.h>
@@ -736,78 +819,88 @@ int MPI_Unpack(
 > >
 > > int main(int argc, char **argv)
 > > {
-> >     int my_rank, num_ranks;
+> >     int my_rank;
+> >     int num_ranks;
 > >     MPI_Init(&argc, &argv);
 > >     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 > >     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
 > >
-> >     int num_rows = 3, num_cols = 3;
-> >
-> >     /* Allocate and initialize a 2D array with the number of the element */
-> >     int **matrix = malloc(num_rows * sizeof(int *));
-> >     for (int i = 0; i < num_rows; ++i) {
-> >         matrix[i] = malloc(num_cols * sizeof(int));
-> >         for (int j = 0; j < num_cols; ++j) {
-> >             matrix[i][j] = num_cols * i + j;
+> >     if (num_ranks != 2) {
+> >         if (my_rank == 0) {
+> >             printf("This example only works with 2 ranks\n");
 > >         }
+> >         MPI_Abort(MPI_COMM_WORLD, 1);
 > >     }
-> >
-> >     /* Calculate how big the MPI_Pack buffer should be */
-> >     int pack_buffer_size;
-> >     MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &pack_buffer_size);
 > >
 > >     if (my_rank == 0) {
-> >         /* Create the pack buffer and pack each row of data into it buffer
-> >            one by one */
-> >         int position = 0;
-> >         char *packed_data = malloc(pack_buffer_size * sizeof(char));
-> >         for (int i = 0; i < num_rows; ++i) {
-> >             MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
+> >         int int_data_count = 5, float_data_count = 10;
+> >         int *int_data = malloc(int_data_count * sizeof(int));
+> >         float *float_data = malloc(float_data_count * sizeof(float));
+> >         for (int i = 0; i < int_data_count; ++i) {
+> >             int_data[i] = i + 1;
+> >         }
+> >         for (int i = 0; i < float_data_count; ++i) {
+> >             float_data[i] = 3.14159 * (i + 1);
 > >         }
 > >
-> >         /* Send the packed data to rank 1 and free memory we no longer need */
-> >         MPI_Send(packed_data, pack_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
-> >         free(packed_data);
+> >         /* use MPI_Pack_size to determine how big the packed buffer needs to be */
+> >         int buffer_size_count, buffer_size_int, buffer_size_float;
+> >         MPI_Pack_size(2, MPI_INT, MPI_COMM_WORLD, &buffer_size_count); /* 2 * INT because we will have 2 counts*/
+> >         MPI_Pack_size(int_data_count, MPI_INT, MPI_COMM_WORLD, &buffer_size_int);
+> >         MPI_Pack_size(float_data_count, MPI_FLOAT, MPI_COMM_WORLD, &buffer_size_float);
+> >         int total_buffer_size = buffer_size_int + buffer_size_float + buffer_size_count;
+> >
+> >         int position = 0;
+> >         char *buffer = malloc(total_buffer_size);
+> >
+> >         /* Pack the data size, followed by the actually data */
+> >         MPI_Pack(&int_data_count, 1, MPI_INT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
+> >         MPI_Pack(int_data, int_data_count, MPI_INT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
+> >         MPI_Pack(&float_data_count, 1, MPI_INT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
+> >         MPI_Pack(float_data, float_data_count, MPI_FLOAT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
+> >
+> >         /* buffer is sent in one communication using MPI_PACKED */
+> >         MPI_Send(buffer, total_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
+> >
+> >         free(buffer);
+> >         free(int_data);
+> >         free(float_data);
 > >     } else {
-> >         /* Create a receive buffer and get the packed buffer from rank 0 */
-> >         char *received_data = malloc(pack_buffer_size * sizeof(char));
-> >         MPI_Recv(received_data, pack_buffer_size + 1, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+> >         int buffer_size;
+> >         MPI_Status status;
+> >         MPI_Probe(0, 0, MPI_COMM_WORLD, &status);
+> >         MPI_Get_count(&status, MPI_PACKED, &buffer_size);
 > >
-> >         /* allocate a matrix to put the receive buffer into -- this is for
-> >            demonstration purposes */
-> >         int **my_matrix = malloc(num_rows * sizeof(int *));
-> >         for (int i = 0; i < num_cols; ++i) {
-> >             my_matrix[i] = malloc(num_cols * sizeof(int));
-> >         }
+> >         char *buffer = malloc(buffer_size);
+> >         MPI_Recv(buffer, buffer_size, MPI_PACKED, 0, 0, MPI_COMM_WORLD, &status);
 > >
-> >         /* Unpack the received data row by row into my_matrix */
 > >         int position = 0;
-> >         for (int i = 0; i < num_rows; ++i) {
-> >             MPI_Unpack(received_data, pack_buffer_size, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
-> >         }
-> >         free(received_data);
+> >         int int_data_count, float_data_count;
 > >
-> >         /* Print the elements of my_matrix */
-> >         printf("Rank 1 received the following array:\n");
-> >         for (int i = 0; i < num_rows; ++i) {
-> >             for (int j = 0; j < num_cols; ++j) {
-> >                 printf(" %d", my_matrix[i][j]);
-> >             }
-> >             printf("\n");
-> >         }
+> >         MPI_Unpack(buffer, buffer_size, &position, &int_data_count, 1, MPI_INT, MPI_COMM_WORLD);
+> >         int *int_data = malloc(int_data_count * sizeof(int));
+> >         MPI_Unpack(buffer, buffer_size, &position, int_data, int_data_count, MPI_INT, MPI_COMM_WORLD);
 > >
-> >         /* Free memory for temporary my_matrix */
-> >         for (int i = 0; i < num_rows; ++i) {
-> >             free(my_matrix[i]);
+> >         MPI_Unpack(buffer, buffer_size, &position, &float_data_count, 1, MPI_INT, MPI_COMM_WORLD);
+> >         float *float_data = malloc(float_data_count * sizeof(float));
+> >         MPI_Unpack(buffer, buffer_size, &position, float_data, float_data_count, MPI_FLOAT, MPI_COMM_WORLD);
+> >
+> >         printf("int data: [");
+> >         for (int i = 0; i < int_data_count; ++i) {
+> >             printf(" %d", int_data[i]);
 > >         }
-> >         free(my_matrix);
+> >         printf(" ]\n");
+> >
+> >         printf("float data: [");
+> >         for (int i = 0; i < float_data_count; ++i) {
+> >             printf(" %f", float_data[i]);
+> >         }
+> >         printf(" ]\n");
+> >
+> >         free(int_data);
+> >         free(float_data);
+> >         free(buffer);
 > >     }
-> >
-> >     /* Free all the memory for matrix */
-> >     for (int i = 0; i < num_rows; ++i) {
-> >         free(matrix[i]);
-> >     }
-> >     free(matrix);
 > >
 > >     return MPI_Finalize();
 > > }
