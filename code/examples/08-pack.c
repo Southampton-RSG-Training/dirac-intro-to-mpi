@@ -28,7 +28,7 @@ int main(int argc, char **argv)
         /* Create the pack buffer and pack each row of data into it buffer
            one by one */
         int position = 0;
-        char *packed_data = malloc(pack_buffer_size * sizeof(char));
+        char *packed_data = malloc(pack_buffer_size);
         for (int i = 0; i < num_rows; ++i) {
             MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
         }
@@ -38,7 +38,7 @@ int main(int argc, char **argv)
         free(packed_data);
     } else {
         /* Create a receive buffer and get the packed buffer from rank 0 */
-        char *received_data = malloc(pack_buffer_size * sizeof(char));
+        char *received_data = malloc(pack_buffer_size);
         MPI_Recv(received_data, pack_buffer_size + 1, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         /* allocate a matrix to put the receive buffer into -- this is for
