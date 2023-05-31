@@ -1,19 +1,19 @@
 ---
 title: Advanced Communication Techniques
 slug: "dirac-intro-to-mpi-advanced-communication"
-teaching: 20
+teaching: 25
 exercises: 20
 questions:
 - How do I use complex data structures in MPI?
 - What is contiguous memory, and why does it matter?
 objectives:
-- Understand the limitations of non-contiguous memory in MPI
-- Know how to define and use custom data types for communication
+- Understand the problems of non-contiguous memory in MPI
+- Know how to define and use derived datatypes
 keypoints:
-- Communicating complex data structures in MPI requires a bit more work
-- Any data being transferred should ideally be a single contiguous block of memory
-- By defining vectors and other datatypes, we can send data for elements which are not-contiguous
-- The functions `MPI_Pack` and `MPI_Unpack` can be used to create a contiguous memory block
+- Communicating complex, heterogeneous or non-contiguous data structures in MPI requires a bit more work
+- Any data being transferred should be a single contiguous block of memory
+- By defining derived datatypes, we can easily send data which is not contiguous
+- The functions `MPI_Pack` and `MPI_Unpack` can be used to manually create a contiguous memory block of data
 ---
 
 In the previous episodes, we've seen the basic building blocks for splitting work and communicating data between ranks,
@@ -28,18 +28,18 @@ efficient data communication.
 
 > ## Size limitations for messages
 >
-> Throughout MPI, the number of elements in a message is defined using an integer: `int count`. In most 64-bit Linux
-> systems, `int`'s are usually 32-bit and so the biggest number that `count` can be is `2^31 - 1 = 2,147,483,647`. If
-> an array exceeds this number of elements, then it cant be easily communicated because of this limitation. At least
-> until "large count" support is added to the version/implementation of MPI you use (support is in the MPI 4.0
-> standard), there are two workarounds workarounds. These are to either send the array in smaller chunks, or to use a
-> derived type.
->
+> In the API for MPI, the function argument which says how many elements of data are being communicated is an integer:
+> `int count`. In most 64-bit Linux systems, `int`'s are usually 32-bit and so the biggest number you can pass to
+> `count` is `2^31 - 1 = 2,147,483,647`, or about 2 billion. Arrays which exceed this length can't be communicated
+> easily in versions of MPI older than MPI-4.0, when support for "large count" communications was added to the MPI
+> standard.  In older MPI versions, there are two workarounds to this limitation. The first is to communicate the large
+> array in smaller, more manageable chunks. The other is to use derived types, to re-shape the data into a smaller
+> chunks.
 {: .callout}
 
 ## Working with multi-dimensional arrays
 
-Almost all scientific and computing problems nowadays require us to think with more than one dimensional data. Using
+Almost all scientific and computing problems nowadays require us to think in more than one dimension. Using
 multi-dimensional arrays, such for using matrices of tensors, or discretising something onto a 2D or 3D grid of points
 are fundamental parts for most scientific software. The additional dimension comes with additional complexity, not just
 in the code we write, but also in how data is communicated.
@@ -651,55 +651,110 @@ MPI_Type_free(&struct_type);
 
 ## Dealing with other non-contiguous data
 
-The previous two sections covered how to communicate complex, but structured, data between ranks using derived
-datatypes. But there are always edge cases which do not necessarily fit into the scope of a derived type.  For example,
-in the last exercise, we've seen that non-contiguous memory, pointers and derived types don't mix well. Large messages
-are also difficult to deal with on versions older than MPI 4.0. Furthermore, we may can also reach performance
-bottlenecks when working with heterogeneous data which doesn't fit, or doesn't make sense to be, in a derived type, as
-each type, or even piece of data, needs to be communicated in separate steps. For situations like this, we can use
-`MPI_Pack()` and `MPI_Unpack()`.
+The previous two sections covered how to communicate complex but structured data between ranks using derived datatypes.
+However,0 there are always some edge cases which don't fit into the glass slipper of a derived types. For example, just
+in the last exercise we've seen that non-contiguous memory, pointers and derived types don't always mix well.
+Furthermore, we may can also reach performance bottlenecks when working with heterogeneous data which doesn't fit, or
+doesn't make sense to be, in a derived type, as each data type needs to be communicated in separate communication calls.
+For edge cases situations like this, we can use the `MPI_Pack()` and `MPI_Unpack()` functions.
 
-Both `MPI_Pack()` and `MPI_Unpack()` are methods for manually arranging and unpacking data element into a contiguous
-buffer, for improved communication efficiency and for cases where regular methods don't fit. We can also create
-self-documenting communications using `MPI_Pack()`, where the packed data contains additional elements which contains
-information describing the structure and content of the remaining data. However, using packed buffers comes with
-additional overheads, in the form of increased memory usage and potentially more communication overheads as packing and
-unpacking data is not free.
+Both `MPI_Pack()` and `MPI_Unpack()` are methods for manually arranging, packing and unpacking data into a contiguous
+buffer for cases where regular communication methods and derived types don't work well or efficiently. We can also
+create self-documenting communications using `MPI_Pack()`, where the packed data contains additional elements which
+describe the size, structure and contents of the remaining data. However, using packed buffers comes with additional
+overheads, in the form of increased memory usage and potentially more communication overheads as packing and unpacking
+data is not free.
+
+When we use `MPI_Pack()`, we take non-contiguous data (sometimes of different datatypes) and "pack" it into a
+contiguous memory buffer, which usually has multiple chunks of data from other sources. The diagram below shows how
+(non-contiguous) data from memory may be packed into a contiguous array using `MPI_Pack()`.
 
 ![Layout of packed memory](fig/packed_buffer_layout.png)
 
+The coloured boxes in both memory representations represent the same piece of data. The green boxes, containing only a
+single number in each each, are used to document the number of elements in the next block of elements in the contiguous
+buffer. This is optional to do, but is generally good practise to also include. From the diagram we can see that we have
+"packed" non-contiguous blocks of memory into a single contiguous block. `MPI_Unpack()` is the reverse. It takes a
+contiguous buffer created using `MPI_Pack()` and copies the blocks of data into the specified memory addresses.
+
+To pack data into a contiguous buffer, we use the `MPI_Pack()` function,
+
 ```c
 int MPI_Pack(
-   const void *inbuf,      /* the input buffer */
-   int incount,            /* the number of items to be packed */
-   MPI_Datatype datatype,  /* the data type of the items to be packed */
-   void *outbuf,           /* the packed buffer */
-   int outsize,            /* the size of the packed buffer */
-   int *position,          /* current position in the packed buffer */
-   MPI_Comm comm           /* the communicator for the packed message */
+   const void *inbuf,      /* The data we want to put into the buffer */
+   int incount,            /* The number of elements of the buffer */
+   MPI_Datatype datatype,  /* The datatype of the elements */
+   void *outbuf,           /* The contiguous buffer to pack the data into */
+   int outsize,            /* The size of the contiguous buffer, in bytes */
+   int *position,          /* A counter of how far into the contiguous buffer to write to */
+   MPI_Comm comm           /* The communicator the packed message will be sent using */
 );
 ```
+
+In the above, `inbuf` is the data we want to pack into a contiguous buffer and `incount` and `datatype` define the
+number of elements in and the datatype of `inbuf`. The parameter `outbuf` is the contiguous buffer the data is packed
+into, with `outsize` being the total size of the buffer in *bytes*. The `position` argument is used to track of the
+current position, in bytes, where data is being written to in `outbuf`. Finally, `comm` is the communicator where the
+communication will happen.
+
+Uniquely, `MPI_Pack()`, and `MPI_Unpack()`, measures the size of the contiguous buffer, `outbuf`, in bytes rather than
+number of elements. We also have to manage `outbuf` and allocate memory for it. But how much memory should we allocate?
+Because `MPI_Pack()` works with`outbuf` in bytes, we typically define `outbuf` as a `char *`. The amount of memory to
+allocate is simply the amount of space, in bytes, required to store all of the data we wish to pack into it. If we had
+an integer array and a floating point array, then the size of the buffer is easy to calculate,
+
+```c
+/* The total buffer size is the sum of the bytes required for the int and float array */
+int size_int_array = num_int_elements * sizeof(int);
+int size_float_array = num_float_elements * sizeof(float);
+int buffer_size = size_int_array + size_float_array;
+/* The buffer is a char *, but could also be cast as void * if you prefer */
+char *buffer = malloc(buffer_size * sizeof(char));  // a char is 1 byte, so sizeof(char) is optional
+```
+
+If we are also working with derived types, such as vectors or structs, then we need to find the size of those types as
+well. But by far the easiest way to handle these types is to use `MPI_Pack_size()`,
 
 ```c
 int MPI_Pack_size(
-   int incount,            /* the number of elements in the buffer */
-   MPI_Datatype datatype,  /* the data type */
-   MPI_Comm comm,          /* the communicator */
-   int *size               /* the upper limit for the size of a packed buffer */
+   int incount,            /* The number of elements in the data */
+   MPI_Datatype datatype,  /* The datatype of the data*/
+   MPI_Comm comm,          /* The communicator the data will be sent over */
+   int *size               /* The calculated upper size limit for the buffer, in bytes */
 );
 ```
 
+`MPI_Pack_size()` is a helper function which calculates the *upper bound* of memory required for the number of elements
+Passed and datatype of the elements. In general, it's preferable to calculate the size using this function because it
+will take into account any implementation specific details and will be more portable. If we wanted to calculate the
+memory required for three derived struct types, we would do the following,
+
+```c
+int struct_array_size;
+MPI_Pack_Size(3, STRUCT_DERIVED_TYPE, MPI_COMM_WORLD, &struct_array_size);
+```
+
+When a rank has received a contiguous buffer, it has to be unpacked using `MPI_Unpack()`,
+
 ```c
 int MPI_Unpack(
-   const void *inbuf,      /* the packed buffer */
-   int insize,             /* the size of the packed buffer */
-   int *position,          /* current position in the packed buffer */
-   void *outbuf,           /* where the unpacked stuff will go */
-   int outcount,           /* how many things to get from the buffer */
-   MPI_Datatype datatype,  /* the data type of the packed elements to get */
-   MPI_Comm comm,          /* the communicator for the packed message */
+   const void *inbuf,      /* The contiguous buffer to unpack */
+   int insize,             /* The total size of the buffer, in bytes */
+   int *position,          /* The position, in bytes, for where to start unpacking from */
+   void *outbuf,           /* An array, or variable, to unpack data into -- this is the output */
+   int outcount,           /* The number of elements of data to unpack */
+   MPI_Datatype datatype,  /* The datatype of the elements to unpack */
+   MPI_Comm comm,          /* The communicator the message was sent using */
 );
 ```
+
+The arguments for this function are essentially a reversed version of `MPI_Pack()`. `inbuf` is now the packed data,
+rather than the data we want to pack into a buffer and `position` is the position, in bytes, in the buffer where to
+start unpacking from. `outbuf` is then where we want to unpack to, and `outcount` is th enumber of elements of
+`datatype` to unpack.
+
+In the example below, `MPI_Pack()`, `MPI_Pack_size()` and `MPI_Unpack()` are used to communicate a (non-contiguous) 2D
+array.
 
 ```c
 /* Allocate and initialise a (non-contiguous) 2D matrix that we will pack into
@@ -732,7 +787,8 @@ for (int i = 0; i < num_rows; ++i) {
 }
 
 /* Send the packed data to rank 1. To send a packed array, we use the MPI_PACKED
-datatype */
+datatype with the count being the size of the buffer in bytes. To send and receive
+the packed data, we can use any of the communication functions */
 MPI_Send(packed_data, max_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
 
 /* To receive packed data, we have to allocate another buffer and receive
@@ -877,6 +933,8 @@ for (int i = 0; i < num_rows; ++i) {
 > >         int position = 0;
 > >         int int_data_count, float_data_count;
 > >
+> >         /* Unpack an integer why defines the size of the integer array,
+> >         then allocate space for an unpack the actual array */
 > >         MPI_Unpack(buffer, buffer_size, &position, &int_data_count, 1, MPI_INT, MPI_COMM_WORLD);
 > >         int *int_data = malloc(int_data_count * sizeof(int));
 > >         MPI_Unpack(buffer, buffer_size, &position, int_data, int_data_count, MPI_INT, MPI_COMM_WORLD);
