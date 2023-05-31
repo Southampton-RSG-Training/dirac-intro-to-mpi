@@ -17,34 +17,33 @@ keypoints:
 ---
 
 In the previous episodes, we've seen the basic building blocks for splitting work and communicating data between ranks,
-meaning we're now dangerous enough to write a simple and successful MPI application. But we've only worked with
-simple data structures so far, such as single variables or small 1D arrays. In reality, the software
-we write uses more complex data structures, such as structures, n-dimensional arrays and other complex types. Working
-with these in MPI require a bit more work to communicate them both correctly and efficiently.
+meaning we're now dangerous enough to write a simple and successful MPI application. We've worked, so far, with simple
+data structures, such as single variables or small 1D arrays. In reality, any useful software we write will use more
+complex data structures, such as structures, n-dimensional arrays and other complex types. Working with these in MPI
+require a bit more work to communicate them correctly and efficiently.
 
-To help with this, MPI provides an interface to create new types known as *derived datatypes*. A derived type acts
-As a set of instructions which enable the translation of complex data structures into instructions, for MPI, for
-efficient data communication.
+To help with this, MPI provides an interface to create new types known as *derived datatypes*. A derived type acts as a
+way to enable the translation of complex data structures into instructions which MPI uses for efficient data access
+communication.
 
 > ## Size limitations for messages
 >
-> In the API for MPI, the function argument which says how many elements of data are being communicated is an integer:
-> `int count`. In most 64-bit Linux systems, `int`'s are usually 32-bit and so the biggest number you can pass to
-> `count` is `2^31 - 1 = 2,147,483,647`, or about 2 billion. Arrays which exceed this length can't be communicated
-> easily in versions of MPI older than MPI-4.0, when support for "large count" communications was added to the MPI
-> standard.  In older MPI versions, there are two workarounds to this limitation. The first is to communicate the large
-> array in smaller, more manageable chunks. The other is to use derived types, to re-shape the data into a smaller
-> chunks.
+> All throughout MPI, the argument which says how many elements of data are being communicated is an integer: `int
+> count`. In most 64-bit Linux systems, `int`'s are usually 32-bit and so the biggest number you can pass to `count` is
+> `2^31 - 1 = 2,147,483,647`, which is about 2 billion. Arrays which exceed this length can't be communicated easily in
+> versions of MPI older than MPI-4.0, when support for "large count" communication was added to the MPI standard. In
+> older MPI versions, there are two workarounds to this limitation. The first is to communicate large arrays in
+> smaller, more manageable chunks. The other is to use derived types, to re-shape the data.
 {: .callout}
 
-## Working with multi-dimensional arrays
+## Multi-dimensional arrays
 
 Almost all scientific and computing problems nowadays require us to think in more than one dimension. Using
-multi-dimensional arrays, such for using matrices of tensors, or discretising something onto a 2D or 3D grid of points
-are fundamental parts for most scientific software. The additional dimension comes with additional complexity, not just
-in the code we write, but also in how data is communicated.
+multi-dimensional arrays, such for matrices or tensors, or discretising something onto a 2D or 3D grid of points
+are fundamental parts for most scientific software. However, the additional dimensions comes with additional complexity,
+not just in the code we write, but also in how data is communicated.
 
-As a quite refresher, to create a 2 x 3 matrix in C and initialize it with some values, we use the following syntax,
+To create a 2 x 3 matrix, in C, and initialize it with some values, we use the following syntax,
 
 ```c
 int matrix[2][3] = { {1, 2, 3}, {4, 5, 6} };  // matrix[rows][cols]
@@ -57,21 +56,21 @@ contains `{4, 5, 6}`. The number of rows and columns can be any value, as long a
 
 When a sequence of things is contiguous, it means there are multiple adjacent things without anything in between them.
 In the context of MPI, when we talk about something being contiguous we are almost always talking about how arrays, and
-other complex data structures are stored in the computer's memory. The elements in array are contiguous when the next,
-or previous, element are stored in an adjacent memory location.
+other complex data structures, are stored in the computer's memory. The elements in an array are contiguous when the
+next, or previous, element are stored in the adjacent memory location.
 
-The memory space of a computer is linear. So when we create a multi-dimensional array, the compiler and operating system
-have to decide how to map and store the elements into a linear memory space. There are two ways to do this:
-[row-major or column-major](https://en.wikipedia.org/wiki/Row-_and_column-major_order). The difference between the
-two ways is which elements of the array are contiguous in memory. Arrays are row-major in C and column-major in Fortran.
-In a row-major array, the elements in each column of a row are contiguous so that element `x[i][j]` is
-preceded by `x[i][j - 1]` and is followed by element `x[i][j +1]`. In Fortran, arrays are column-major so `x(i, j)` is
+The memory space of a computer is linear. When we create a multi-dimensional array, the compiler and operating system
+decide how to map and store the elements into that linear space. There are two ways to do this:
+[row-major or column-major](https://en.wikipedia.org/wiki/Row-_and_column-major_order). The difference
+is which elements of the array are contiguous in memory. Arrays are row-major in C and column-major in Fortran.
+In a row-major array, the elements in each column of a row are contiguous, so element `x[i][j]` is
+preceded by `x[i][j - 1]` and is followed by `x[i][j +1]`. In Fortran, arrays are column-major so `x(i, j)` is
 followed by `x(i + 1, j)` and so on.
 
-The diagram below shows how a 4 x 4 matrix is mapped in a linear memory space, for a row-major array. At the top of the
-diagram is the representation of the linear memory space, where each number is ID of the element in memory. Below that
-are two representations of the array in 2D: the left shows the coordinate of each element and the right shows
-the ID of the element.
+The diagram below shows how a 4 x 4 matrix is mapped onto a linear memory space, for a row-major array. At the top of
+the diagram is the representation of the linear memory space, where each number is ID of the element in memory. Below
+that are two representations of the array in 2D: the left shows the coordinate of each element and the right shows the
+ID of the element.
 
 <img src="fig/c_column_memory_layout.png" alt="Column memory layout in C" height=360>
 
@@ -81,10 +80,10 @@ in row-major arrays are contiguous. The next diagram instead shows how elements 
 
 <img src="fig/c_row_memory_layout.png" alt="Row memory layout in C" height=360>
 
-Looking first at the purple boxes (containing elements 2, 6, 10 and 14) which make up up the row elements for column 1,
+Looking first at the purple boxes (containing elements 2, 6, 10 and 14) which make up the row elements for column 1,
 we can see that the elements are not contiguous. Element `[0][1]` maps to element 2 and element `[1][1]` maps to element
-6and so on. Elements in the same column but in a different row are separated by four other elements. In other words,
-elements in other rows are not contiguous.
+6 and so on. Elements in the same column but in a different row are separated by four other elements, in this example.
+In other words, elements in other rows are not contiguous.
 
 > ## Does memory contiguity affect performance?
 >
@@ -94,70 +93,71 @@ elements in other rows are not contiguous.
 > >
 > > Yes, memory contiguity can affect how fast our programs run. When data is stored in a neat and organized way, the
 > > computer can find and use it quickly. But if the data is scattered around randomly (fragmented), it takes more time
-> > to locate and use it, which slows down our programs. So, keeping our data and data access patterns organized can
-> > make our programs faster. However, we probably won't notice the difference for small arrays and data structures.
+> > to locate and use it, which decreases performance. Keeping our data and data access patterns organized can
+> > make our programs faster. But we probably won't notice the difference for small arrays and data structures.
 > {: .solution}
 {: .challenge}
 
 > ## What about if I use `malloc()`?
 >
 > More often than not, we will see `malloc()` being used to allocate memory for arrays. Especially if the code is using
-> an older standard such as C90, which does not support [variable length
+> an older standard, such as C90, which does not support [variable length
 > arrays](https://en.wikipedia.org/wiki/Variable-length_array). When we use `malloc()`, we get a contiguous array of
-> elements. To create a 2D array using `malloc()`, we  create an array of pointers (which are contiguous),
+> elements. To create a 2D array using `malloc()`, we have to first create an array of pointers (which are contiguous)
+> and allocate memory for each pointer,
 >
 > ```c
 > int num_rows = 3, num_cols = 5;
 >
 > float **matrix = malloc(num_rows * sizeof(float*));  /* Each pointer is the start of a row */
 > for (int i = 0; i < num_rows; ++i) {
->    matrix[i] = malloc(num_cols * sizeof(float));     /* Here we allocate memory to store the  elements for row i */
+>    matrix[i] = malloc(num_cols * sizeof(float));     /* Here we allocate memory to store the column elements for row i */
 > }
 >
 > for (int i = 0; i < num_rows; ++i) {
 >    for (int j = 0; i < num_cols; ++j) {
->       matrix[i][j] = 3.14159;                        /* We index as usual */
+>       matrix[i][j] = 3.14159;                        /* Indexing is done as matrix[rows][cols] */
 >    }
 > }
 > ```
 >
 > There is one problem though. `malloc()` *does not* guarantee that subsequently allocated memory will be contiguous.
 > When `malloc()` requests memory, the operating system will assign whatever memory is free. This is not always next to
-> the block of memory from the previous allocation. This makes life tricky arrays allocated this way  since memory has
-> to contiguous in memory for MPI. But there are workarounds. One is to only use 1D arrays (with the same number of
-> elements as the higher dimension array) and to map coordinates into a linear coordinate system. For example, the
-> element `[2][4]` in a a 3 x 5 matrix mapped in 1D would be accessed as,
+> the block of memory from the previous allocation. This makes life tricky, since data *has* to be contiguous for MPI
+> communication. But there are workarounds. One is to only use 1D arrays (with the same number of elements as the higher
+> dimension array) and to map the n-dimensional coordinates into a linear coordinate system. For example, the element
+> `[2][4]` in a 3 x 5 matrix would be accessed as,
 >
 > ```c
 > int index_for_2_4 = matrix1d[5 * 2 + 4];  // num_cols * row + col
 > ```
 >
-> Another solution is to move memory around, such as in [this example](code/examples/08-malloc-trick.c) or by using a
-> more sophisticated method such as the [`arralloc()` function](code/arralloc.c) (not part of the standard library)
-> which can allocate arbitrary n-dimensional arrays into a contiguous block.
+> Another solution is to move memory around so that it is contiguous, such as in [this
+> example](code/examples/08-malloc-trick.c) or by using a more sophisticated function such as [`arralloc()`
+> function](code/arralloc.c) (not part of the standard library) which can allocate arbitrary n-dimensional arrays into a
+> contiguous block.
 >
 {: .callout}
 
-To send the elements of a row of a 4 x 4 matrix, we do something like this:
+For a row-major array, we can send the elements of a single row (for a 4 x 4 matrix) easily,
 
 ```c
-MPI_Send(&matrix[1][0], 4, MPI_INT, ...);
+MPI_Send(&matrix[1][0], 4, MPI_INT ...);
 ```
 
 The send buffer is `&matrix[1][0]`, which is the memory address of the first element in row 1. As the columns are four
-elements long, we have specified to only sent four `MPI_INT`s. Even though we're working here with a 2D array, sending a
-row of the array is essentially the same as with a 1D array. The main difference is the send buffer. Instead of using
-a pointer to the start of the array, an address to the first element of the row (`&matrix[1][0]`) is used instead. We
-can do this precisely because, just like in a 1D array, the elements in the row are contiguous. It's not possible to do
-the same for a column, because the elements in the column are not contiguous.
+elements long, we have specified to only send four integers. Even though we're working here with a 2D array, sending a
+single row of the matrix is the same as sending a 1D array. Instead of using a pointer to the start of the array, an
+address to the first element of the row (`&matrix[1][0]`) is used instead. It's not possible to do the same for a column
+of the matrix, because the elements down the column are not contiguous.
 
 ### Using vectors to send slices of an array
 
-To send a column of a matrix or tensor, we have to use a *vector*. A vector in MPI is a dervied datatype that represents
-a continuous sequence of elements which have a regular spacing between them. By using vectors, we can create data types
-for column vectors, row vectors or sub-arrays, similar to how we can [create slices for Numpy arrays in
-Python](https://numpy.org/doc/stable/user/basics.indexing.html). All of which can be sent in a single, efficient,
-communication. To create a vector, we have to create a new datatype using `MPI_Type_vector()`,
+To send a column of a matrix, we have to use a *vector*. A vector is a derived datatype that represents multiple (or
+one) contiguous sequences of elements, which have a regular spacing between them. By using vectors, we can create data
+types for column vectors, row vectors or sub-arrays, similar to how we can [create slices for Numpy arrays in
+Python](https://numpy.org/doc/stable/user/basics.indexing.html), all of which can be sent in a single, efficient,
+communication. To create a vector, we create a new datatype using `MPI_Type_vector()`,
 
 ```c
 int MPI_Type_vector(
@@ -175,14 +175,14 @@ with a row in between (rows 2 and 4),
 <img src="fig/vector_linear_memory.png" alt="How a vector is laid out in memory" height=210>
 
 A *block* refers to a sequence of contiguous elements. In the diagrams above, each sequence of contiguous purple or
-orange elements represents a block. The *block length* is the number of elements within a block; in the above
-this is four. The *stride* is the distance between the start of each block, which is eight. The count is the number of
-blocks we want. When we create a vector, we're creating a new derived datatype which includes one or more blocks of
-contiguous elements.
+orange elements represents a block. The *block length* is the number of elements within a block; in the above this is
+four. The *stride* is the distance between the start of each block, which is eight in the example. The count is the
+number of blocks we want. When we create a vector, we're creating a new derived datatype which includes one or more
+blocks of contiguous elements.
 
-But fefore we can use the vector we create, it has to be committed using `MPI_Type_commit()`. This finalises the
-creation of a derived datatype. Forgetting to do this step lead to unexpected behaviour, and potentially disastrous
-consequences for our program!
+Before we can use the vector we create to communicate data, it has to be committed using `MPI_Type_commit()`. This
+finalises the creation of a derived type. Forgetting to do this step leads to unexpected behaviour, and potentially
+disastrous consequences!
 
 ```c
 int MPI_Type_commit(
@@ -217,9 +217,8 @@ MPI_Type_vector(count, blocklength, stride, MPI_INT, &rows_type);
 MPI_Type_commit(&rows_type);
 
 /* Send the middle row of our 2d send_buffer array. Note that we are sending
- &send_buffer[1][0] and not send_buffer. This is because we are using an offset
- to change the starting point of where we begin sending memory
- */
+   &send_buffer[1][0] and not send_buffer. This is because we are using an offset
+   to change the starting point of where we begin sending memory */
 int matrix[4][4] = {
    { 1,  2,  3,  4},
    { 5,  6,  7,  8},
@@ -239,17 +238,16 @@ MPI_Recv(recv_buffer, num_elements, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IG
 MPI_Type_free(&rows_type);
 ```
 
-There are two things above, which look quite innocent, but are actually very important. First of all, the send buffer
+There are two things above, which look quite innocent, but are important to understand. First of all, the send buffer
 in `MPI_Send()` is not `matrix` but `&matrix[1][0]`. In `MPI_Send()`, the send buffer is a pointer to the memory
 location where the start of the data is stored. In the above example, the intention is to only send the second and forth
 rows, so the start location of the data to send is the address for element `[1][0]`. If we used `matrix`, the first and
-third row would be sent instead.
+third rows would be sent instead.
 
 The other thing to notice, which is not immediately clear why it's done this way, is that the receive datatype is
-`MPI_INT` and the count is `num_elements = count * blocklength` elements instead of a single element `rows_type`. This
+`MPI_INT` and the count is `num_elements = count * blocklength` instead of a single element of `rows_type`. This
 is because when a rank receives data, the data is contiguous array. We don't need to use a vector to describe the layout
-of the data like when sending it. We are really just receiving a 1D contiguous array of `num_elements = count *
-blocklength` integers.
+of contiguous memory. We are just receiving a contiguous array of `num_elements = count * blocklength` integers.
 
 > ## Sending columns from an array
 >
@@ -415,13 +413,13 @@ blocklength` integers.
 
 ## Structures in MPI
 
-Structures, commonly known as structs, are custom datatypes which cotain multiple variables of different types. Some
-common use cases of structs, in scientific code, include grouping together constants or global variables, or are used
-to represent a physical thing, such as a particle, or something more abstract like a cell on a simulation grid. When we
-use structs, we can write clearer, more concise and better structured code.
+Structures, commonly known as structs, are custom datatypes which contain multiple variables of (usually) different
+types. Some common use cases of structs, in scientific code, include grouping together constants or global variables, or
+they are used to represent a physical thing, such as a particle, or something more abstract like a cell on a simulation
+grid. When we use structs, we can write clearer, more concise and better structured code.
 
-To communicate a struct, we need to define a derived datatype to tell MPI how understand the memory layout of the
-struct. This is just like how we had to create a a derived type to describe a vector earlier. For a struct, we use
+To communicate a struct, we need to define a derived datatype which tells MPI about the layout of the struct in memory.
+Instead of `MPI_Type_create_vector()`, for a struct, we use,
 `MPI_Type_create_struct()`,
 
 ```c
@@ -436,18 +434,18 @@ int MPI_Type_create_struct(
 
 The main difference between vector and struct derived types is that the arguments for structs expect arrays, since
 structs are made up of multiple variables. Most of these arguments are straightforward, given what we've just seen for
-defining vectors. But the `array_of_displacements` arguments is new to us.
+defining vectors. But `array_of_displacements` is new and unique.
 
-When a struct is created, it occupies a single contiguous block of memory. But there is a catch. For
-performance reasons, compilers insert arbitrary "padding" between each member for performance reasons. This padding,
-known as [data structure alignment](https://en.wikipedia.org/wiki/Data_structure_alignment), optimises both the layout of
-the memory and the access of it. As a result, the memory layout of a struct may look like this:
+When a struct is created, it occupies a single contiguous block of memory. But there is a catch. For performance
+reasons, compilers insert arbitrary "padding" between each member for performance reasons. This padding, known as [data
+structure alignment](https://en.wikipedia.org/wiki/Data_structure_alignment), optimises both the layout of the memory
+and the access of it. As a result, the memory layout of a struct may look like this instead:
 
 <img src="fig/struct_memory_layout.png" alt="Memory layout for a struct" height="384">
 
 Although the memory used for padding and the struct's data exists in a contiguous block, the actual data we care about
 is not contiguous any more. This is why we need the `array_of_displacements` argument, which specifies the distance, in
-bytes, between each struct member relative to the start of the struct. In practise, it serves the same purpose to the
+bytes, between each struct member relative to the start of the struct. In practise, it serves a similar purpose of the
 stride in vectors.
 
 To calculate the byte displacement for each member, we need to know where in memory each member of a struct exists. To
@@ -489,8 +487,7 @@ MPI_Get_address(&foo.value, &block_offsets[1]);  /* And the second member "value
 for (int i = 0; i < 2; ++i) {
    /* MPI_Aint_diff is a macro to calculate the difference between two
       MPI_Aints and is a replacement for:
-      (MPI_Aint) ((char *) block_offsets[i] - (char *) base_address)
-    */
+      (MPI_Aint) ((char *) block_offsets[i] - (char *) base_address) */
    block_offsets[i] = MPI_Aint_diff(block_offsets[i], base_address);
 }
 
@@ -503,8 +500,7 @@ MPI_Type_commit(&struct_type);
    MPI_Recv, we use the struct type. We have to do this because we aren't
    receiving a contiguous block of a single type of date. By using the type, we
    tell MPI_Recv how to understand the mix of data types and padding and how to
-   assign those back to recv_struct
-  */
+   assign those back to recv_struct */
 if (my_rank == 0) {
    MPI_Send(&foo, 1, struct_type, 1, 0, MPI_COMM_WORLD);
 } else {
@@ -620,7 +616,8 @@ MPI_Type_free(&struct_type);
 > > The short answer is that we can't do it using a derived type, and will have to *manually* communicate the data
 > > separately. The reason why can't use a derived type is because the address of `*position` is the address of the
 > > pointer. The offset between `num_cells` and `*position` is the size of the pointer and whatever padding the compiler
-> > adds. The memory we allocated somewhere else in the memory, as shown in the diagram below.
+> > adds. It is not the data which `position` points to. The memory we allocated for `*position` is somewhere else in
+> > memory, as shown in the diagram below, and is non-contiguous with respect to the fields in the struct.
 > >
 > > <img src="fig/struct_with_pointer.png" alt="Memory layout for a struct with a pointer" height="320">
 > >
@@ -632,52 +629,56 @@ MPI_Type_free(&struct_type);
 > ## A different way to calculate displacements
 >
 > There are other ways to calculate the displacement, other than using what MPI provides for us. Another common way is
-> to use the macro `offsetof()` macro part of `<stddef.h>`. `offsetof()` accepts two arguments, the first being the
-> struct type and the second being the member to calculate the offset for.
+> to use the `offsetof()` macro part of `<stddef.h>`. `offsetof()` accepts two arguments, the first being the struct
+> type and the second being the member to calculate the offset for.
 >
 > ```c
 > #include <stddef.h>
 > MPI_Aint displacements[2];
-> displacements[0] = (MPI_Aint) offsetof(struct MyStruct, id);
+> displacements[0] = (MPI_Aint) offsetof(struct MyStruct, id);     /* The cast to MPI_Aint is for extra safety */
 > displacements[1] = (MPI_Aint) offsetof(struct MyStruct, value);
 >```
 >
 > This method and the other shown in the previous examples both returns the same displacement values. It's mostly a
 > personal choice which you choose to use. Some people prefer the "safety" of using `MPI_Get_address()` whilst others
 > prefer to write more concise code with `offsetof()`. Of course, if you're a Fortran programmer then you can't use the
-> macro
+> macro!
 >
 {: .callout}
 
 ## Dealing with other non-contiguous data
 
 The previous two sections covered how to communicate complex but structured data between ranks using derived datatypes.
-However,0 there are always some edge cases which don't fit into the glass slipper of a derived types. For example, just
-in the last exercise we've seen that non-contiguous memory, pointers and derived types don't always mix well.
-Furthermore, we may can also reach performance bottlenecks when working with heterogeneous data which doesn't fit, or
-doesn't make sense to be, in a derived type, as each data type needs to be communicated in separate communication calls.
-For edge cases situations like this, we can use the `MPI_Pack()` and `MPI_Unpack()` functions.
+However, there are *always* some edge cases which don't fit into a derived types. For example, just in the last exercise
+we've seen that pointers and derived types don't mix well. Furthermore, we can sometimes also reach performance
+bottlenecks when working with heterogeneous data which doesn't fit, or doesn't make sense to be, in a derived type, as
+each data type needs to be communicated in separate communication calls. This can be especially bad if blocking
+communication is used! For edge cases situations like this, we can use the `MPI_Pack()` and `MPI_Unpack()` functions to
+do things ourselves.
 
 Both `MPI_Pack()` and `MPI_Unpack()` are methods for manually arranging, packing and unpacking data into a contiguous
-buffer for cases where regular communication methods and derived types don't work well or efficiently. We can also
-create self-documenting communications using `MPI_Pack()`, where the packed data contains additional elements which
-describe the size, structure and contents of the remaining data. However, using packed buffers comes with additional
-overheads, in the form of increased memory usage and potentially more communication overheads as packing and unpacking
-data is not free.
+buffer, for cases where regular communication methods and derived types don't work well or efficiently. They can also be
+used to create self-documenting message, where the packed data contains additional elements which describe the size,
+structure and contents of the data. But we have to be careful, as using packed buffers comes with additional overhead,
+in the form of increased memory usage and potentially more communication overhead as packing and unpacking data is not
+free.
 
 When we use `MPI_Pack()`, we take non-contiguous data (sometimes of different datatypes) and "pack" it into a
-contiguous memory buffer, which usually has multiple chunks of data from other sources. The diagram below shows how
-(non-contiguous) data from memory may be packed into a contiguous array using `MPI_Pack()`.
+contiguous memory buffer. The diagram below shows how two (non-contiguous) chunks of data may be packed into a contiguous
+array using `MPI_Pack()`.
 
 ![Layout of packed memory](fig/packed_buffer_layout.png)
 
-The coloured boxes in both memory representations represent the same piece of data. The green boxes, containing only a
-single number in each each, are used to document the number of elements in the next block of elements in the contiguous
-buffer. This is optional to do, but is generally good practise to also include. From the diagram we can see that we have
-"packed" non-contiguous blocks of memory into a single contiguous block. `MPI_Unpack()` is the reverse. It takes a
-contiguous buffer created using `MPI_Pack()` and copies the blocks of data into the specified memory addresses.
+The coloured boxes in both memory representations (memory and pakced) are the same chunks of data. The green boxes
+containing only a single number are used to document the number of elements in the block of elements they are adjacent
+to, in the contiguous buffer. This is optional to do, but is generally good practise to include to create a
+self-documenting message. From the diagram we can see that we have "packed" non-contiguous blocks of memory into a
+single contiguous block. We can do this using `MPI_Pack()`. To reverse this action, and "unpack" the buffer, we use
+`MPI_Unpack()`. As you might expect, `MPI_Unpack()` takes a buffer, created by `MPI_Pack()` and unpacks the data back
+into various memory address.
 
-To pack data into a contiguous buffer, we use the `MPI_Pack()` function,
+To pack data into a contiguous buffer, we have to pack each block of data, one by one, into the contiguous buffer using
+the `MPI_Pack()` function,
 
 ```c
 int MPI_Pack(
@@ -693,15 +694,17 @@ int MPI_Pack(
 
 In the above, `inbuf` is the data we want to pack into a contiguous buffer and `incount` and `datatype` define the
 number of elements in and the datatype of `inbuf`. The parameter `outbuf` is the contiguous buffer the data is packed
-into, with `outsize` being the total size of the buffer in *bytes*. The `position` argument is used to track of the
-current position, in bytes, where data is being written to in `outbuf`. Finally, `comm` is the communicator where the
-communication will happen.
+into, with `outsize` being the total size of the buffer in *bytes*. The `position` argument is used to keep track of the
+current position, in bytes, where data is being packed into `outbuf`.
 
-Uniquely, `MPI_Pack()`, and `MPI_Unpack()`, measures the size of the contiguous buffer, `outbuf`, in bytes rather than
-number of elements. We also have to manage `outbuf` and allocate memory for it. But how much memory should we allocate?
-Because `MPI_Pack()` works with`outbuf` in bytes, we typically define `outbuf` as a `char *`. The amount of memory to
-allocate is simply the amount of space, in bytes, required to store all of the data we wish to pack into it. If we had
-an integer array and a floating point array, then the size of the buffer is easy to calculate,
+Uniquely, `MPI_Pack()`, and `MPI_Unpack()` as well, measure the size of the contiguous buffer, `outbuf`, in bytes rather than
+in number of elements. Given that `MPI_Pack()` is all about manually arranging data, we have to also manage the
+allocation of memory for `outbuf`. But how do we allocate memory for it, and how much should we allocate? Allocation is
+done by using `malloc()`. Since `MPI_Pack()` works with `outbuf` in terms of bytes, the convention is to declare
+`outbuf` as a `char *`. The amount of memory to allocate is simply the amount of space, in bytes, required to store all
+of the data we want to pack into it. Just like how we would normally use `malloc()` to create an array. If we had
+an integer array and a floating point array which we wanted to pack into the buffer, then the size required is easy to
+calculate,
 
 ```c
 /* The total buffer size is the sum of the bytes required for the int and float array */
@@ -712,8 +715,9 @@ int buffer_size = size_int_array + size_float_array;
 char *buffer = malloc(buffer_size * sizeof(char));  // a char is 1 byte, so sizeof(char) is optional
 ```
 
-If we are also working with derived types, such as vectors or structs, then we need to find the size of those types as
-well. But by far the easiest way to handle these types is to use `MPI_Pack_size()`,
+If we are also working with derived types, such as vectors or structs, then we need to find the size of those types. By
+far the easiest way to handle these is to use `MPI_Pack_size()`, which supports derived datatypes through the
+`MPI_Datatype`,
 
 ```c
 int MPI_Pack_size(
@@ -724,17 +728,20 @@ int MPI_Pack_size(
 );
 ```
 
-`MPI_Pack_size()` is a helper function which calculates the *upper bound* of memory required for the number of elements
-Passed and datatype of the elements. In general, it's preferable to calculate the size using this function because it
-will take into account any implementation specific details and will be more portable. If we wanted to calculate the
-memory required for three derived struct types, we would do the following,
+`MPI_Pack_size()` is a helper function to calculate the *upper bound* of memory required. It is, in general, preferable
+to calculate the buffer size using this function, as it takes into account any implementation specific MPI detail and
+thus is more portable between implementations and systems. If we wanted to calculate the memory required for three
+elements of some derived struct type and a `double` array, we would do the following,
 
 ```c
-int struct_array_size;
-MPI_Pack_Size(3, STRUCT_DERIVED_TYPE, MPI_COMM_WORLD, &struct_array_size);
+int struct_array_size, float_array_size;
+MPI_Pack_size(3, STRUCT_DERIVED_TYPE, MPI_COMM_WORLD, &struct_array_size);
+MPI_Pack_size(50, MPI_DOUBLE. MPI_COMM_WORLD, &float_array_size);
+int buffer_size = struct_array_size + float_array_size;
 ```
 
-When a rank has received a contiguous buffer, it has to be unpacked using `MPI_Unpack()`,
+When a rank has received a contiguous buffer, it has to be unpacked into its constituent parts, one by one, using
+`MPI_Unpack()`,
 
 ```c
 int MPI_Unpack(
@@ -748,17 +755,16 @@ int MPI_Unpack(
 );
 ```
 
-The arguments for this function are essentially a reversed version of `MPI_Pack()`. `inbuf` is now the packed data,
-rather than the data we want to pack into a buffer and `position` is the position, in bytes, in the buffer where to
-start unpacking from. `outbuf` is then where we want to unpack to, and `outcount` is th enumber of elements of
-`datatype` to unpack.
+The arguments for this function are essentially the reverse of `MPI_Pack()`. Instead of being the buffer to pack into,
+`inbuf` is now the packed buffer and `position` is the position, in bytes, in the buffer where to unpacking from.
+`outbuf` is then the variable we want to unpack into, and `outcount` is the number of elements of `datatype` to unpack.
 
-In the example below, `MPI_Pack()`, `MPI_Pack_size()` and `MPI_Unpack()` are used to communicate a (non-contiguous) 2D
-array.
+In the example below, `MPI_Pack()`, `MPI_Pack_size()` and `MPI_Unpack()` are used to communicate a (non-contiguous)
+3 x 3 matrix.
 
 ```c
 /* Allocate and initialise a (non-contiguous) 2D matrix that we will pack into
-a buffer */
+   a buffer */
 int num_rows = 3, num_cols = 3;
 int **matrix = malloc(num_rows * sizeof(int *));
 for (int i = 0; i < num_rows; ++i) {
@@ -769,9 +775,9 @@ for (int i = 0; i < num_rows; ++i) {
 }
 
 /* Determine the upper limit for the amount of memory the buffer requires. Since
-this is a simple situation, we could probably have done this manually using
-`num_rows * num_cols * sizeof(int)`. The size `max_buffer_size` is returned in
-bytes */
+   this is a simple situation, we could probably have done this manually using
+   `num_rows * num_cols * sizeof(int)`. The size `max_buffer_size` is returned in
+   bytes */
 int max_buffer_size;
 MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &max_buffer_size);
 
@@ -787,17 +793,17 @@ for (int i = 0; i < num_rows; ++i) {
 }
 
 /* Send the packed data to rank 1. To send a packed array, we use the MPI_PACKED
-datatype with the count being the size of the buffer in bytes. To send and receive
-the packed data, we can use any of the communication functions */
+   datatype with the count being the size of the buffer in bytes. To send and receive
+   the packed data, we can use any of the communication functions */
 MPI_Send(packed_data, max_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
 
 /* To receive packed data, we have to allocate another buffer and receive
-MPI_PACKED elements into it */
+   MPI_PACKED elements into it */
 char *received_data = malloc(max_buffer_size);
 MPI_Recv(received_data, max_buffer_size, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 /* Once we have the packed buffer, we can then unpack the data into the rows
-of my_matrix */
+   of my_matrix */
 int position = 0;
 int my_matrix[num_rows][num_cols];
 for (int i = 0; i < num_rows; ++i) {
@@ -807,11 +813,10 @@ for (int i = 0; i < num_rows; ++i) {
 
 > ## Blocking or non-blocking?
 >
-> The processes of packing data into a contiguous buffer cannot happens asynchronously. The same goes for unpacking
-> data. But this doesn't mean that the packed data has to be sent or received using blocking communication methods. The
-> packed data is a contiguous memory buffer, so it can be sent and received using any the communication functions in
-> MPI. The example above uses blocking communication functions, but it would work with non-blocking communication also.
->
+> The processes of packing data into a contiguous buffer does not happen asynchronously. The same goes for unpacking
+> data. But this doesn't restrict the packed data from being only sent synchronously. The packed data can be
+> communicated using any communication function, just like the previous derived types. It works just as well to
+> communicate the buffer using non-blocking methods, as it does using blocking methods.
 {: .callout}
 
 > ## What if the other rank doesn't know the size of the buffer?
