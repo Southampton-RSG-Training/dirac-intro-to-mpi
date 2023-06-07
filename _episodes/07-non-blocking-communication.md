@@ -10,8 +10,11 @@ objectives:
 - Understand the advantages and disadvantages of non-blocking communication
 - Know how to use non-blocking communication functions
 keypoints:
-- Non-blocking communication can lead to performance improvements over blocking communication
+- Non-blocking communication often leads to performance improvements compared to blocking communication
 - However, it is usually more difficult to use non-blocking communication
+- Most blocking communication operations have a non-blocking variant
+- We have to wait for a communication to finish using `MPI_Wait()` (or `MPI_Test()`) otherwise we will encounter
+  strange behaviour
 ---
 
 In the previous episodes, we learnt how to send messages between two ranks or collectively to multiple ranks. In both
@@ -147,14 +150,17 @@ In the example below, an array of integers (`some_ints`) is sent from rank 0 to 
 MPI_Status status;
 MPI_Request request;
 
+int recv_ints[5];
+int some_ints[5] = { 1, 2, 3, 4, 5 };
+
 if (my_rank == 0) {
     MPI_Isend(some_ints, 5, MPI_INT, 1, 0, MPI_COMM_WORLD, &request);
     MPI_Wait(&request, &status);
-    some_ints[1] = 5;  /* After MPI_Wait(), some_ints has been sent and can be modified again */
+    some_ints[1] = 42;  /* After MPI_Wait(), some_ints has been sent and can be modified again */
 } else {
     MPI_Irecv(recv_ints, 5, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
     MPI_Wait(&request, &status);
-    rank_1_some_ints[1] = recv_ints[2];  /* recv_ints isn't guaranteed to have the correct data until after MPI_Wait()*/
+    int data_i_wanted = recv_ints[2];  /* recv_ints isn't guaranteed to have the correct data until after MPI_Wait()*/
 }
 ```
 
@@ -165,6 +171,9 @@ asynchronous nature of non-blocking communication at all. To really make use of 
 interleave computation (or any busy work we need to do) with communication, such as as in the next example.
 
 ```c
+MPI_Status status;
+MPI_Request request;
+
 if (my_rank == 0) {
     /* This send important_data without being blocked and move into the next work */
     MPI_Isend(important_data, 16, MPI_INT, 1, 0, MPI_COMM_WORLD, &request);
@@ -188,7 +197,7 @@ MPI_Wait(&request, &status);
 simulate_something(important_data);
 ```
 
-> ## Deadlocks
+> ## What about deadlocks?
 >
 > Deadlocks are easily created when using blocking communication. The code snippet below shows an example of deadlock
 > from one of the previous episodes.
@@ -214,11 +223,11 @@ simulate_something(important_data);
 > > MPI_Request send_req, recv_req;
 > >
 > > if (my_rank == 0) {
-> >     MPI_Isend(&numbers, 8, MPI_INT, 1, 0, MPI_COMM_WORLD, &send_req);
-> >     MPI_Irecv(&numbers, 8, MPI_INT, 1, 0, MPI_COMM_WORLD, &recv_req);
+> >     MPI_Isend(numbers, 8, MPI_INT, 1, 0, MPI_COMM_WORLD, &send_req);
+> >     MPI_Irecv(numbers, 8, MPI_INT, 1, 0, MPI_COMM_WORLD, &recv_req);
 > > } else {
-> >     MPI_Isend(&numbers, 8, MPI_INT, 0, 0, MPI_COMM_WORLD, &send_req);
-> >     MPI_Irecv(&numbers, 8, MPI_INT, 0, 0, MPI_COMM_WORLD, &recv_req);
+> >     MPI_Isend(numbers, 8, MPI_INT, 0, 0, MPI_COMM_WORLD, &send_req);
+> >     MPI_Irecv(numbers, 8, MPI_INT, 0, 0, MPI_COMM_WORLD, &recv_req);
 > > }
 > >
 > > MPI_Status statuses[2];
@@ -230,8 +239,26 @@ simulate_something(important_data);
 > > rank 0 and 1 one both send, meaning there is no corresponding receive, the immediate return from send means the
 > > receive function is still called. Thus a deadlock cannot happen.
 > >
+> > However, it is still possible to create a deadlock using `MPI_Wait()`. If `MPI_Wait()` is waiting to for
+> > `MPI_Irecv()` to get some data, but there is no matching send operation (so no data has been sent), then
+> > `MPI_Wait()` can never return resulting in a deadlock. In the example code below, rank 0 becomes deadlocked.
+> >
+> > ```c
+> > MPI_Status status;
+> > MPI_Request send_req, recv_req;
+> >
+> > if (my_rank == 0) {
+> >     MPI_Isend(numbers, 8, MPI_INT, 1, 0, MPI_COMM_WORLD, &send_req);
+> >     MPI_Irecv(numbers, 8, MPI_INT, 1, 0, MPI_COMM_WORLD, &recv_req);
+> > } else {
+> >     MPI_Irecv(numbers, 8, MPI_INT, 0, 0, MPI_COMM_WORLD, &recv_req);
+> > }
+> >
+> > MPI_Wait(&send_req, &status);  /* Wait for both requests in one call */
+> > MPI_Wait(&recv_req, &status);  /* Wait for both requests in one call */
+> > ```
+> >
 > {: .solution}
->
 >
 {: .challenge}
 
@@ -273,6 +300,28 @@ Another use case of `MPI_Test()` is to emulate an event driven scheduler.
 
 - do some spare work whilst waiting for data for your main work
 
+> ## Communication timeout
+>
+> ```c
+> clock_t start_time = clock();
+> double elapsed_time = 0.0;
+>
+> while (elapsed_time < TIMEOUT) {
+>     // Check if communication completed
+>     int flag = 0;
+>     MPI_Test(&request, &flag, &status);
+>
+>     if (flag) {
+>         break;
+>     }
+>
+>     // Update elapsed time
+>     elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
+> }
+> ```
+>
+{: .callout}
+
 > ## Try it yourself
 >
 > In the MPI program below, a chain of ranks has been set up so one rank will receive a message from the rank to its
@@ -304,10 +353,11 @@ Another use case of `MPI_Test()` is to emulate an event driven scheduler.
 >
 >     char send_message[MESSAGE_SIZE];
 >     char recv_message[MESSAGE_SIZE];
->     sprintf(send_message, "Hello from rank %d!", my_rank);
 >
 >     int right_rank = (my_rank + 1) % num_ranks;
 >     int left_rank = my_rank < 1 ? num_ranks - 1 : my_rank - 1;
+>
+>     sprintf(send_message, "Hello from rank %d!", my_rank);
 >
 >     /*
 >      * Your code goes here
@@ -379,25 +429,151 @@ Another use case of `MPI_Test()` is to emulate an event driven scheduler.
 
 ## Collective communication
 
-Since MPI-3.0, non-blocking collective communication has been possible.
+Since the release of MPI 3.0, the collective operations have non-blocking versions. Using these non-blocking collective
+operations is as easy as we've seen for point-to-point communication in the last section. If we want to do a
+non-blocking reduction, we'd use `MPI_Ireduce()`,
 
 ```c
-MPI_Request request;
+int MPI_Ireduce(
+    const void *sendbuf,
+    void *recvbuf,
+    int count,
+    MPI_Datatype datatype,
+    MPI_Op op,
+    int root,
+    MPI_Comm comm,
+    MPI_Request *request,
+);
+```
+
+As with `MPI_Send()` vs. `MPI_Isend()` the only change in using the non-blocking variant of `MPI_Reduce()` is the
+addition of the `*request` argument, which returns a request handle. This is the request handle we'll use with either
+`MPI_Wait()` or `MPI_Test()` to ensure that the communication has finished, and been successful. The below code examples
+shows a non-blocking reduction,
+
+```c
 MPI_Status status;
+MPI_Request request;
 
 int recv_data;
 int send_data = my_rank + 1;
 
-/* */
-MPI_Iallreduce(&send_data, &recv_data, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
-/* */
+/* MPI_Iallreduce is the non-blocking version of MPI_Allreduce. This reduction operation will sum send_data
+   for all ranks and distribute the result back to all ranks into recv_data */
+MPI_Iallreduce(&send_data, &recv_data, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD, &request);
+/* Remember, using MPI_Wait() straight after the communication is equivalent to using a blocking communication */
 MPI_Wait(&request, &status);
 ```
 
-> ## Try it yourself
+> ## What's `MPI_Ibarrier()` all about?
+>
+> In the previous episode, we learnt that `MPI_Barrier()` is a collective operation we can use to bring all the ranks
+> back into synchronisation with one another. How do you think the non-blocking variant, `MPI_Ibarrier()`, is used and
+> how might you use this in your program? You may want to read the relevant
+> [documentation](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node127.htm) first.
+>
+> > ## Solution
+> >
+> > When a rank reaches a non-blocking barrier, `MPI_Ibarrier()` will return immediately whether other ranks have
+> > reached the barrier or not. The behaviour of the barrier we would expect is enforced at the next `MPI_Wait()` (or
+> > `MPI_Test()`) operation. `MPI_Wait()` will return once all the ranks have reached the barrier.
+> >
+> > Non-blocking barriers can be used to help hide/reduce synchronisation overhead. We may want to add a synchronisation
+> > point in our program so the ranks start some work all at the same time. With a blocking barrier, the ranks have to
+> > wait for every rank to reach the barrier, and can't do anything other than wait. But with a non-blocking barrier, we
+> > can overlap the barrier operation with other, independent, work whilst ranks wait for the other ranks to catch up.
+> >
+> {: .solution}
+{: .challenge}
+
+> ## Calculate and broadcast
+>
+> Using non-blocking collective communication, calculate the sum of `my_num = my_rank + 1` from each MPI rank and
+> broadcast the value of the sum to every rank. To calculate the sum, use either `MPI_Igather()` or `MPI_Ireduce()`. You
+> should use the code below as your starting point.
+>
+> ```c
+> #include <mpi.h>
+> #include <stdio.h>
+>
+> int main(int argc, char **argv)
+> {
+>     int my_rank;
+>     int num_ranks;
+>     MPI_Init(&argc, &argv);
+>     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+>     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+>
+>     if (num_ranks < 2) {
+>         printf("This example needs at least 2 ranks\n");
+>         MPI_Finalize();
+>         return 1;
+>     }
+>
+>     int sum = 0;
+>     int my_num = my_rank + 1;
+>
+>     printf("Start : Rank %d: my_num = %d sum = %d\n", my_rank, my_num, sum);
+>
+>     /*
+>      * Your code goes here
+>      */
+>
+>     printf("End : Rank %d: my_num = %d sum = %d\n", my_rank, my_num, sum);
+>
+>     return MPI_Finalize();
+> }
+> ```
+>
+> For two ranks, the output should be:
+>
+> ```
+> Start : Rank 0: my_num = 1 sum = 0
+> Start : Rank 1: my_num = 2 sum = 0
+> End : Rank 0: my_num = 1 sum = 3
+> End : Rank 1: my_num = 2 sum = 3
+> ```
 >
 >
 > > ## Solution
+> >
+> > The solution below uses `MPI_Irduce()` to calculate the sum and `MPI_Ibcast()` to broadcast it to all ranks. For an
+> > even shorter solution, `MPI_Ireduceall()` would also achieve the same thing in a single line!
+> >
+> > ```c
+> > int main(int argc, char **argv)
+> > {
+> >     int my_rank;
+> >     int num_ranks;
+> >     MPI_Init(&argc, &argv);
+> >     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+> >     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+> >
+> >     if (num_ranks < 2) {
+> >         printf("This example needs at least 2 ranks\n");
+> >         MPI_Finalize();
+> >         return 1;
+> >     }
+> >
+> >     int sum = 0;
+> >     int my_num = my_rank + 1;
+> >
+> >     printf("Start : Rank %d: my_num = %d sum = %d\n", my_rank, my_num, sum);
+> >
+> >     MPI_Status status;
+> >     MPI_Request request;
+> >
+> >     MPI_Ireduce(&my_num, &sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD, &request);
+> >     MPI_Wait(&request, &status);
+> >
+> >     MPI_Ibcast(&sum, 1, MPI_INT, 0, MPI_COMM_WORLD, &request);
+> >     MPI_Wait(&request, &status);
+> >
+> >     printf("End : Rank %d: my_num = %d sum = %d\n", my_rank, my_num, sum);
+> >
+> >     return MPI_Finalize();
+> > }
+> > ```
 > >
 > {: .solution}
 {: .challenge}
