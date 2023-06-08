@@ -1,8 +1,8 @@
 ---
 title: Non-blocking Communication
 slug: "dirac-intro-to-mpi-non-blocking-communication"
-teaching: 0
-exercises: 0
+teaching: 15
+exercises: 20
 questions:
 - What are the advantages of non-blocking communication?
 - How do I use non-blocking communication?
@@ -26,6 +26,10 @@ which is a waste of CPU cycles.
 ## A brief (re-)introduction
 
 Hello, this will be an introduction to non-blocking.
+
+The overlap of computation and communication is critical for good performance of many HPC applications.
+
+Increases in code complexity.
 
 <img src="fig/non-blocking-wait.png" alt="Non-blocking communication" height="250"/>
 
@@ -264,20 +268,28 @@ simulate_something(important_data);
 
 ## To wait, or not to wait
 
-<https://cvw.cac.cornell.edu/mpip2p/waittestfree>
-
-`MPI_Wait()` is blocking. `MPI_Test()` is the non-blocking counterpart.
-
-The `MPI_Test()` function is used to test if a communication has finished, without blocking the execution of the
-program.
+In some sense, by using `MPI_Wait()` we aren't fully non-blocking because we still block execution whilst we wait for
+communications to complete. To be "truly" asynchronous we can use another function called `MPI_Test()` which, at face
+value, is the non-blocking counterpart of `MPI_Wait()`. When we use `MPI_Test()`, it checks if a communication is
+finished and sets the value of a flag to true if it is and returns. If a communication hasn't finished, `MPI_Test()`
+still returns but the value of the flag is false instead. `MPI_Test()` has the following arguments,
 
 ```c
 int MPI_Test(
     MPI_Request *request,  /* The request handle for the communication to test */
-    int *flag,             /* A flag to indicate if the communication has completed */
+    int *flag,             /* A flag to indicate if the communication has completed - returned by pointer */
     MPI_Status *status,    /* The status handle for the communication to test */
 );
 ```
+
+`*request` and `*status` are the same you'd use for `MPI_Wait()`. `*flag` is the variable which is modified to indicate
+if the communication has finished or not. Since it's an integer, if the communication hasn't finished then `flag == 0`.
+
+We use `MPI_Test()` is much the same way as we'd use `MPI_Wait()`. We start a non-blocking communication, and keep doing
+other, independent, tasks whilst the communication finishes. The key difference is that since `MPI_Test()` returns
+immediately, we may need to make multiple calls before the communication is finished. In the code example below,
+`MPI_Test()` is used within a `while` loop which keeps going until either the communication has finished or until
+there is no other work left to do.
 
 ```c
 MPI_Status status;
@@ -285,40 +297,62 @@ MPI_Request request;
 MPI_Irecv(recv_buffer, 16, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
 
 /* We need to define a flag, to track when the communication has completed */
-int flag = false;
+int comm_completed = 0;
 
 /* One example use case is keep checking if the communication has finished, and continuing
    to do CPU work until it has */
-while (!flag) {
-    do_some_other_stuff();
+while (!comm_completed && work_still_to_do()) {
+    do_some_other_work();
     /* MPI_Test will return flag == true when the communication has finished */
-    MPI_Test(&request, &flag, &status);
+    MPI_Test(&request, &comm_completed, &status);
+}
+
+/* If there is no more work and the communication hasn't finished yet, then we should wait
+   for it to finish */
+if (!comm_completed) {
+    MPI_Wait(&request, &status)
 }
 ```
 
-Another use case of `MPI_Test()` is to emulate an event driven scheduler.
+> ## Dynamic task scheduling
+>
+> Dynamic task schedulers are a class of algorithms designed to optimise the work load across ranks. The most
+> efficient, and, really, only practical, implementations use non-blocking communication to periodically
+> check the work balance and *asynchronously* assign and send additional work to a rank, in the background, as it
+> continues to work on its current queue of work.
+>
+{: .callout}
 
-- do some spare work whilst waiting for data for your main work
-
-> ## Communication timeout
+> ## An interesting aside: communication timeouts
+>
+> Non-blocking communication gives us a lot of flexibility, letting us write complex communication algorithms
+> to experiment and find the right solution. One example of that flexibility is using `MPI_Test()` to  create a
+> communication timeout algorithm.
 >
 > ```c
+> #define COMM_TIMEOUT 60  /* seconds */
+>
 > clock_t start_time = clock();
 > double elapsed_time = 0.0;
+> int comm_completed = 0
 >
-> while (elapsed_time < TIMEOUT) {
->     // Check if communication completed
->     int flag = 0;
->     MPI_Test(&request, &flag, &status);
->
->     if (flag) {
->         break;
->     }
->
->     // Update elapsed time
+> while (!comm_completed && elapsed_time < COMM_TIMEOUT) {
+>     /* Check if communication completed */
+>     MPI_Test(&request, &comm_completed, &status);
+>     /* Update elapsed time */
 >     elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
 > }
+>
+> if (elapsed_time >= COMM_TIMEOUT) {
+>     MPI_Cancel(&request);           /* Cancel the request to stop the, e.g. receive operation */
+>     handle_communication_errors();  /* Put the program into a predictable state */
+> }
 > ```
+>
+> Something like this would effectively remove deadlocks in our program, and allows us to take appropriate actions to
+> recover the program back into a predictable state. In reality, however, it would be hard to find a useful and
+> appropriate use case for this in scientific computing. In any case, though, it demonstrate the power and flexibility
+> offered by non-blocking communication.
 >
 {: .callout}
 
@@ -365,6 +399,15 @@ Another use case of `MPI_Test()` is to emulate an event driven scheduler.
 >
 >     return MPI_Finalize();
 > }
+> ```
+>
+> The output from your program should look something like this:
+>
+>```
+> Rank 0: message received -- Hello from rank 3!
+> Rank 1: message received -- Hello from rank 0!
+> Rank 2: message received -- Hello from rank 1!
+> Rank 3: message received -- Hello from rank 2!
 > ```
 >
 > > ## Solution
@@ -486,7 +529,7 @@ MPI_Wait(&request, &status);
 > {: .solution}
 {: .challenge}
 
-> ## Calculate and broadcast
+> ## Reduce and broadcast
 >
 > Using non-blocking collective communication, calculate the sum of `my_num = my_rank + 1` from each MPI rank and
 > broadcast the value of the sum to every rank. To calculate the sum, use either `MPI_Igather()` or `MPI_Ireduce()`. You
