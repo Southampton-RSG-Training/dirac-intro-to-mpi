@@ -18,3 +18,5 @@ vendor/
 .idea/
 venv/
 .venv/
+submodules/
+.gitmodules
