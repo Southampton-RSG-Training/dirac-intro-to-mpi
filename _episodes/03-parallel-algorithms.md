@@ -65,17 +65,22 @@ the "clock" of CPU, parts are "input", doing something is an
 "operation", and the car structure on the conveyor belt is "output".
 The algorithm is the set of operations that constructs a car from the
 parts.  
-![Input -> Algorithm -> Output]({{ page.root }}{% link fig/serial_task_flow.png %}) It consists of individual steps, adding
-parts or adjusting them.  These could be done one after the other by a
-single worker.  
-![Input -> Step 1 -> Step 2 -> Step 3 -> Output]({{ page.root }}{% link fig/serial_multi_task_flow.png %})
+
+<img src="fig/serial_task_flow.png" alt="Sequence of input data being processed by an algorithm to generate output data "/>
+
+It consists of individual steps, adding parts or adjusting them.  
+These could be done one after the other by a single worker.  
+
+<img src="fig/serial_multi_task_flow.png" alt="Same sequential set of steps being done twice"/>
 
 If we want to produce a car faster, maybe we can do some of the work
 in parallel.  Let's say we can hire four workers to attach each of the
 tires at the same time.  All of these steps have the same input, a car
 without tires, and they work together to create an output, a car with
 tires.
-![Input -> Step 1 / Step 2 / Step 3 -> Output]({{ page.root }}{% link fig/parallel_simple_flow.png %})
+
+<img src="fig/parallel_simple_flow.png" alt="Reorganise steps into parallel execution"/>
+
 The crucial thing that allows us to add the tires in parallel is that
 they are independent.  Adding one tire does not prevent you from
 adding another, or require that any of the other tires are added.  The
@@ -107,7 +112,8 @@ time.
 However, attaching the front tires both require that the axis is
 there.  This step must be completed first, but the two tires can then
 be attached at the same time.
-![Input -> Task 1 -> Task 2 / Task 3 -> Output]({{ page.root }}{% link fig/parallel_complicated_flow.png %})
+
+<img src="fig/parallel_complicated_flow.png" alt="Depiction of process with two steps being dependent on output from a previous step"/>
 
 A part of the program that cannot be run in parallel is called a
 "serial region" and a part that can be run in parallel is called a
@@ -274,7 +280,7 @@ cores.
 In the end, both data parallelism and message passing logically achieve
 the following:
 
-![Each rank has it's own data]({{ page.root }}{% link fig/dataparallel.png %})
+<img src="fig/dataparallel.png" alt="Each rank has its own data"/>
 
 Therefore, each rank essentially operates on its own set of data, regardless
 of paradigm.
@@ -327,7 +333,7 @@ problem).  The tasks can be very different and take different amounts
 of time, but when a worker has completed its tasks, it will pick the
 next one from the queue.
 
-![Each rank taking one task from the top of a queue]({{ page.root }}{% link fig/queue.png %})
+<img src="fig/queue.png" alt="Each rank taking one task from the top of a queue"/>
 
 In an MPI code, the queue approach requires the ranks to communicate
 what they are doing to all the other ranks, resulting in some
@@ -343,7 +349,7 @@ program like generating random numbers or dividing up the big
 database. The manager can become one of the workers after finishing
 managerial work.
 
-![A manager rank controlling the queue]({{ page.root }}{% link fig/manager.png %})
+<img src="fig/manager.png" alt="A manager rank controlling the queue"/>
 
 In an MPI implementation, the main function will usually contain an
 `if` statement that determines whether the rank is the manager or a
@@ -380,7 +386,7 @@ simulating atoms in a crystal, it makes sense to divide the space
 into domains. Each rank will handle the simulation within its
 own domain.
 
-![Data points divided to four ranks]({{ page.root }}{% link fig/domaindecomposition.png %})
+<img src="fig/domaindecomposition.png" alt="Data points divided into four ranks"/>
 
 Many algorithms involve multiplying very large matrices.  These
 include finite element methods for computational field theories as

@@ -23,7 +23,7 @@ In this section we will use two MPI library functions, `MPI_Send` and
 - Since they involve two ranks, they are called "point-to-point" communication
   (unlike "collective" communication which will be described later).
 
-![send-receive]({{ page.root }}{% link fig/send-recv.png %})
+<img src="fig/send-recv.png" alt="Sending data from one rank to another using MPI send and receive"/>
 
 The process of communicating data follows a standard pattern.
 Rank A decides to send data to rank B.
