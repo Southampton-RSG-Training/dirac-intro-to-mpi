@@ -47,8 +47,8 @@ code in such a way there there is *other* work to do whilst data is being commun
 expect non-blocking communication to improve th performance, and scalability, of our parallel algorithms, it's not
 always clear cut or predictable if it can help. If we are not careful, we may end up replacing blocking communication
 overheads with synchronization overheads. For example, if one rank depends on the data of another rank and there is no
-other work to do, that rank will have to wait around until the data it needs is ready, as illustrated in the
-diagram below.
+other work to do, that rank will have to wait around until the data it needs is ready, as illustrated in the diagram
+below.
 
 <img src="fig/non-blocking-wait-data.png" alt="Non-blocking communication with data dependency" height="250"/>
 
