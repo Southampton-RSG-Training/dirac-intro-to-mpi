@@ -19,19 +19,34 @@ keypoints:
 
 In the previous episodes, we learnt how to send messages between two ranks or collectively to multiple ranks. In both
 cases, we used blocking communication functions which meant our program wouldn't progress until data had been sent and
-received successfully. It takes time, and computing power, to transfer data into buffers, to send that data around
-(over the network) and to receive the data into another rank. For the most part, the CPU isn't actually doing anything,
-which is a waste of CPU cycles.
+received successfully. It takes time, and computing power, to transfer data into buffers, to send that data around (over
+the network) and to receive the data into another rank. But for the most part, the CPU isn't actually doing anything.
 
 ## A brief (re-)introduction
 
-Hello, this will be an introduction to non-blocking.
+When we use blocking communication, like `MPI_Send()`, `MPI_Recv()`, `MPI_Reduce()` and etc, execution is passed from
+our program to MPI and is not passed back until the communication has finished. With non-blocking communication, control
+is passed back immediately and whilst the data is transferred in the background, our program is free to do other work
+which does not depend on that data. This ability to *overlap* computation and communication is absolutely critical for
+good performance for many HPC applications. The CPU is used very little when communicating data, so we are effectively
+wasting resources by not using them when we can. With good use of non-blocking communication, we can continue to use the
+CPU whilst some communication happens and, at the same time, hide/reduce some of the communication overhead by
+overlapping the communication with additional computation.
 
-The overlap of computation and communication is critical for good performance of many HPC applications.
+Reducing the communication overhead is incredibly important for the scalability of HPC applications, especially when we
+use lots of ranks. As the number of ranks increases, the communication overhead to talk to every rank, naturally, also
+increases. Blocking communication limits the scalability, as it can, relatively speaking, take a long time to
+do that. The asynchronous nature of non-blocking communication makes it more flexible, allowing us to write more
+sophisticated and performance communication algorithms.
 
-Increases in code complexity.
-
-<img src="fig/non-blocking-wait.png" alt="Non-blocking communication" height="250"/>
+All of this comes with a price. Non-blocking communication is more difficult to use *effectively*, and oftens results in
+more complex code. Not only does it result in more code, but we have to think about the structure of our code in such a
+way there there is *other* work to do whilst communication happens in the background. Additionally , whilst we typically
+expect non-blocking communication to improve the performance, and scalability, of our parallel algorithm, it's not
+always clear or predictable if non-blocking can help in all cases. Also if we are not careful, we may end up replacing
+blocking communication overheads with synchronization overheads. If one rank depends on the data of another rank and
+there is no other independent work to do, it will have to wait until the data it needs is ready. This is illustrated in
+the diagram below.
 
 <img src="fig/non-blocking-wait-data.png" alt="Non-blocking communication with data dependency" height="250"/>
 
@@ -52,8 +67,8 @@ Increases in code complexity.
 > >
 > > On the other hand, some  disadvantages are:
 > >
-> > - It is more difficult to use non-blocking communication. Not only is it harder to handle errors and recover, you
-> >   additionally have to worry about data synchronisation and dependency.
+> > - It is more difficult to use non-blocking communication. Not only does it result in more, and more complex, lines
+> >   of code, we also have to worry about rank synchronisation and data dependency.
 > > - Whilst typically using non-blocking communication, where appropriate, improves performance, it's not always clear
 > >   cut or predictable if non-blocking will result in sufficient performance gains to justify the increased
 > >   complexity.
@@ -81,6 +96,21 @@ int MPI_Isend(
 The arguments are identical to `MPI_Send()`, other than the addition of the `*request` argument. This argument is known
 as an *handle* (because it "handles" a communication request) which is used to track the progress of a (non-blocking)
 communication.
+
+> ## Naming conventions
+>
+> Non-blocking functions have the same name as their blocking counterpart, but prefixed with "I". The "I" stands for
+> "immediate", indicating that the function returns immediately and does not block the program whilst data is being
+> communicated in the background. The table below shows some examples of blocking functions and their non-blocking
+> counterparts.
+>
+> | Blocking | Non-blocking|
+> | -------- | ----------- |
+> | `MPI_Bsend()` | `MPI_Ibsend()` |
+> | `MPI_Barrier()` | `MPI_Ibarrier()` |
+> | `MPI_Reduce()` | `MPI_Ireduce()` |
+>
+{: .callout}
 
 When we use non-blocking communication, we have to follow it up with `MPI_Wait()` to synchronise the
 program and make sure `*buf` is ready to be re-used. This is incredibly important to do. Suppose we are sending an array
@@ -118,21 +148,6 @@ int MPI_Irecv(
     MPI_Request *request,   /* The communication request handle */
 );
 ```
-
-> ## Naming conventions
->
-> Non-blocking functions have the same name as their blocking counterpart, but prefixed with "I". The "I" stands for
-> "immediate", indicating that the function returns immediately and does not block the program whilst data is being
-> communicated in the background. The table below shows some examples of blocking functions and their non-blocking
-> counterparts.
->
-> | Blocking | Non-blocking|
-> | -------- | ----------- |
-> | `MPI_Bsend()` | `MPI_Ibsend()` |
-> | `MPI_Barrier()` | `MPI_Ibarrier()` |
-> | `MPI_Reduce()` | `MPI_Ireduce()` |
->
-{: .callout}
 
 > ## True or false?
 >
