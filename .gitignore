@@ -18,5 +18,8 @@ vendor/
 .idea/
 venv/
 .venv/
-submodules/
+.vscode
+setup.md
+_includes/
 .gitmodules
+submodules/
