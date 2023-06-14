@@ -1,5 +1,6 @@
 ---
 title: "Writing Parallel Algorithms using MPI"
+math: true
 slug: "dirac-intro-to-mpi-parallel-algorithms"
 teaching: 0
 exercises: 0
@@ -20,9 +21,11 @@ keypoints:
 - By default, the order in which operations are run between parallel MPI processes is arbitrary.
 ---
 
-TODO: section intro
+TODO: write intro leading in from previous two episodes
 
 ## Serial and Parallel Execution
+
+TODO: part of this section to be ported into previous intro sections?
 
 An algorithm is a series of steps to solve a problem.  Let us imagine
 these steps as a familiar scene in car manufacturing:
@@ -121,9 +124,9 @@ A part of the program that cannot be run in parallel is called a
 good parallel program, most of the time is spent in parallel regions.
 The program can never run faster than the sum of the serial regions.
 
->## Serial and Parallel regions
+> ## Serial and Parallel Regions
 >
-> Identify serial and parallel regions in the following algorithm
+> Identify the serial and parallel regions in the following algorithm:
 >
 > ~~~
 >  vector_1[0] = 1;
@@ -140,8 +143,9 @@ The program can never run faster than the sum of the serial regions.
 >~~~
 >{: .source}
 >
->>## Solution
->>~~~
+>> ## Solution
+>>
+>> ~~~
 >> serial   | vector_0[0] = 1;
 >>          | vector_1[1] = 1;
 >>          | for i in 2 ... 1000
@@ -155,8 +159,8 @@ The program can never run faster than the sum of the serial regions.
 >>          |   print("The sum of the vectors is.", vector_3[i]);
 >>
 >> The first and the second loop could also run at the same time.
->>~~~
->>{: .source}
+>> ~~~
+>> {: .source}
 >>
 >> In the first loop, every iteration depends on data from the previous two.
 >> In the second two loops, nothing in a step depends on any of the other steps.
@@ -396,13 +400,11 @@ matrices into smaller submatrices and composes the result from
 multiplications of the submatrices.  If there are four ranks, the
 matrix is divided into four submatrices.
 
-TODO: consider build support for matrix rendering
-
 $$ A = \left[ \begin{array}{cc}A_{11} & A_{12} \\ A_{21} & A_{22}\end{array} \right] $$
 
 $$ B = \left[ \begin{array}{cc}B_{11} & B_{12} \\ B_{21} & B_{22}\end{array} \right] $$
 
-$$ A \cdot B = \left[ \begin{array}{cc}A_{11} \cdot B_{11} + A_{12} \cdot B_{21} & A_{11} \cdot B_{12} + A_{12} \cdot B_{22} \\ A_{21} \cdot B_{11} + A_{22} \cdot B_{21} & A_{21} \cdot B_{12} + A_{22} \cdot B_{22}\end{array} \right] $$
+$$ A \cdot B = \left[ \begin{array}{cc}A_{11} \cdot B_{11} + A_{12} \cdot B_{21} & A_{11} \cdot B_{12} + A_{12} \cdot B_{22} \\ A_{21} \cdot B_{11} + A_{22} \cdot B_{21} & A_{21} \cdot B_{12} + A_{22} \cdot B_{22}\end{array} \right]$$
 
 If the number of ranks is higher, each rank needs data from one row and one column to complete its operation.
 
@@ -450,13 +452,18 @@ Both `MPI_Init` and `MPI_Finalize` return an integer.
 This describes errors that may happen in the function.
 Usually we will return the value of `MPI_Finalize` from the main function
 
-After MPI is initialized, you can find out the rank of the copy using the `MPI_Comm_rank` function:
+After MPI is initialized, you can find out the total number of ranks and the specific rank of the copy:
 
 ~~~
-int rank;
+int size, rank;
+int MPI_Comm_size(MPI_COMM_WORLD, &size);
 int MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 ~~~
 {: .language-c}
+
+Here, `MPI_COMM_WORLD` is a **communicator**, which is a collection of ranks that are able to exchange data
+between one another. We'll look into these in a bit more detail in the next episode, but essentially we use
+`MPI_COMM_WORLD` which is the default communicator which refers to all ranks.
 
 Here's a more complete example:
 
@@ -465,23 +472,22 @@ Here's a more complete example:
 #include <mpi.h>
 
 int main(int argc, char** argv) {
-    int rank;
+    int size, rank;
 
     // First call MPI_Init
     MPI_Init(&argc, &argv);
     
-    // Get my rank
+    // Get total number of ranks and my rank
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    printf("My rank number is %d\n", rank);
+    printf("My rank number is %d out of %d\n", rank, size);
 
     // Call finalize at the end
     return MPI_Finalize();
 }
 ~~~
 {: .language-c}
-
-TODO: consider getting COMM_size to example above, adding to printf
 
 > ## Compile and Run
 >
