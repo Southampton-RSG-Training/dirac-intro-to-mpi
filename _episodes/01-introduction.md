@@ -126,7 +126,7 @@ Now, let's take a brief look at these fundamental concepts and explore the diffe
 > especially with frameworks like OpenMP, modifying a program becomes simpler. This ease of use stems from the fact that threads operate within the same process and can 
 > directly access shared data, eliminating the need for complex inter-process communication mechanisms required by MPI. However, it's important to note that threads within 
 > a process are limited to a single computer. While they provide an effective means of utilizing multiple CPU cores on a single machine, they cannot extend beyond the boundaries of that computer.
-<img src="fig/multithreading.svg" height="250" alt='Threads'/>
+> <img src="fig/multithreading.svg" height="250" alt='Threads'/>
 {: .callout}
 
 > ## Analogy
