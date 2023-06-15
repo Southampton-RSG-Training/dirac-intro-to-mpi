@@ -1,6 +1,5 @@
 ---
 title: "Writing Parallel Algorithms using MPI"
-math: true
 slug: "dirac-intro-to-mpi-parallel-algorithms"
 teaching: 0
 exercises: 0
@@ -21,11 +20,9 @@ keypoints:
 - By default, the order in which operations are run between parallel MPI processes is arbitrary.
 ---
 
-TODO: write intro leading in from previous two episodes
+TODO: section intro
 
 ## Serial and Parallel Execution
-
-TODO: part of this section to be ported into previous intro sections?
 
 An algorithm is a series of steps to solve a problem.  Let us imagine
 these steps as a familiar scene in car manufacturing:
@@ -68,22 +65,17 @@ the "clock" of CPU, parts are "input", doing something is an
 "operation", and the car structure on the conveyor belt is "output".
 The algorithm is the set of operations that constructs a car from the
 parts.  
-
-<img src="fig/serial_task_flow.png" alt="Sequence of input data being processed by an algorithm to generate output data "/>
-
-It consists of individual steps, adding parts or adjusting them.  
-These could be done one after the other by a single worker.  
-
-<img src="fig/serial_multi_task_flow.png" alt="Same sequential set of steps being done twice"/>
+![Input -> Algorithm -> Output]({{ page.root }}{% link fig/serial_task_flow.png %}) It consists of individual steps, adding
+parts or adjusting them.  These could be done one after the other by a
+single worker.  
+![Input -> Step 1 -> Step 2 -> Step 3 -> Output]({{ page.root }}{% link fig/serial_multi_task_flow.png %})
 
 If we want to produce a car faster, maybe we can do some of the work
 in parallel.  Let's say we can hire four workers to attach each of the
 tires at the same time.  All of these steps have the same input, a car
 without tires, and they work together to create an output, a car with
 tires.
-
-<img src="fig/parallel_simple_flow.png" alt="Reorganise steps into parallel execution"/>
-
+![Input -> Step 1 / Step 2 / Step 3 -> Output]({{ page.root }}{% link fig/parallel_simple_flow.png %})
 The crucial thing that allows us to add the tires in parallel is that
 they are independent.  Adding one tire does not prevent you from
 adding another, or require that any of the other tires are added.  The
@@ -115,8 +107,7 @@ time.
 However, attaching the front tires both require that the axis is
 there.  This step must be completed first, but the two tires can then
 be attached at the same time.
-
-<img src="fig/parallel_complicated_flow.png" alt="Depiction of process with two steps being dependent on output from a previous step"/>
+![Input -> Task 1 -> Task 2 / Task 3 -> Output]({{ page.root }}{% link fig/parallel_complicated_flow.png %})
 
 A part of the program that cannot be run in parallel is called a
 "serial region" and a part that can be run in parallel is called a
@@ -124,9 +115,9 @@ A part of the program that cannot be run in parallel is called a
 good parallel program, most of the time is spent in parallel regions.
 The program can never run faster than the sum of the serial regions.
 
-> ## Serial and Parallel Regions
+>## Serial and Parallel regions
 >
-> Identify the serial and parallel regions in the following algorithm:
+> Identify serial and parallel regions in the following algorithm
 >
 > ~~~
 >  vector_1[0] = 1;
@@ -143,9 +134,8 @@ The program can never run faster than the sum of the serial regions.
 >~~~
 >{: .source}
 >
->> ## Solution
->>
->> ~~~
+>>## Solution
+>>~~~
 >> serial   | vector_0[0] = 1;
 >>          | vector_1[1] = 1;
 >>          | for i in 2 ... 1000
@@ -159,8 +149,8 @@ The program can never run faster than the sum of the serial regions.
 >>          |   print("The sum of the vectors is.", vector_3[i]);
 >>
 >> The first and the second loop could also run at the same time.
->> ~~~
->> {: .source}
+>>~~~
+>>{: .source}
 >>
 >> In the first loop, every iteration depends on data from the previous two.
 >> In the second two loops, nothing in a step depends on any of the other steps.
@@ -284,7 +274,7 @@ cores.
 In the end, both data parallelism and message passing logically achieve
 the following:
 
-<img src="fig/dataparallel.png" alt="Each rank has its own data"/>
+![Each rank has it's own data]({{ page.root }}{% link fig/dataparallel.png %})
 
 Therefore, each rank essentially operates on its own set of data, regardless
 of paradigm.
@@ -337,7 +327,7 @@ problem).  The tasks can be very different and take different amounts
 of time, but when a worker has completed its tasks, it will pick the
 next one from the queue.
 
-<img src="fig/queue.png" alt="Each rank taking one task from the top of a queue"/>
+![Each rank taking one task from the top of a queue]({{ page.root }}{% link fig/queue.png %})
 
 In an MPI code, the queue approach requires the ranks to communicate
 what they are doing to all the other ranks, resulting in some
@@ -353,7 +343,7 @@ program like generating random numbers or dividing up the big
 database. The manager can become one of the workers after finishing
 managerial work.
 
-<img src="fig/manager.png" alt="A manager rank controlling the queue"/>
+![A manager rank controlling the queue]({{ page.root }}{% link fig/manager.png %})
 
 In an MPI implementation, the main function will usually contain an
 `if` statement that determines whether the rank is the manager or a
@@ -390,7 +380,7 @@ simulating atoms in a crystal, it makes sense to divide the space
 into domains. Each rank will handle the simulation within its
 own domain.
 
-<img src="fig/domaindecomposition.png" alt="Data points divided into four ranks"/>
+![Data points divided to four ranks]({{ page.root }}{% link fig/domaindecomposition.png %})
 
 Many algorithms involve multiplying very large matrices.  These
 include finite element methods for computational field theories as
@@ -400,11 +390,13 @@ matrices into smaller submatrices and composes the result from
 multiplications of the submatrices.  If there are four ranks, the
 matrix is divided into four submatrices.
 
+TODO: consider build support for matrix rendering
+
 $$ A = \left[ \begin{array}{cc}A_{11} & A_{12} \\ A_{21} & A_{22}\end{array} \right] $$
 
 $$ B = \left[ \begin{array}{cc}B_{11} & B_{12} \\ B_{21} & B_{22}\end{array} \right] $$
 
-$$ A \cdot B = \left[ \begin{array}{cc}A_{11} \cdot B_{11} + A_{12} \cdot B_{21} & A_{11} \cdot B_{12} + A_{12} \cdot B_{22} \\ A_{21} \cdot B_{11} + A_{22} \cdot B_{21} & A_{21} \cdot B_{12} + A_{22} \cdot B_{22}\end{array} \right]$$
+$$ A \cdot B = \left[ \begin{array}{cc}A_{11} \cdot B_{11} + A_{12} \cdot B_{21} & A_{11} \cdot B_{12} + A_{12} \cdot B_{22} \\ A_{21} \cdot B_{11} + A_{22} \cdot B_{21} & A_{21} \cdot B_{12} + A_{22} \cdot B_{22}\end{array} \right] $$
 
 If the number of ranks is higher, each rank needs data from one row and one column to complete its operation.
 
@@ -452,18 +444,13 @@ Both `MPI_Init` and `MPI_Finalize` return an integer.
 This describes errors that may happen in the function.
 Usually we will return the value of `MPI_Finalize` from the main function
 
-After MPI is initialized, you can find out the total number of ranks and the specific rank of the copy:
+After MPI is initialized, you can find out the rank of the copy using the `MPI_Comm_rank` function:
 
 ~~~
-int size, rank;
-int MPI_Comm_size(MPI_COMM_WORLD, &size);
+int rank;
 int MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 ~~~
 {: .language-c}
-
-Here, `MPI_COMM_WORLD` is a **communicator**, which is a collection of ranks that are able to exchange data
-between one another. We'll look into these in a bit more detail in the next episode, but essentially we use
-`MPI_COMM_WORLD` which is the default communicator which refers to all ranks.
 
 Here's a more complete example:
 
@@ -472,22 +459,23 @@ Here's a more complete example:
 #include <mpi.h>
 
 int main(int argc, char** argv) {
-    int size, rank;
+    int rank;
 
     // First call MPI_Init
     MPI_Init(&argc, &argv);
     
-    // Get total number of ranks and my rank
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
+    // Get my rank
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 
-    printf("My rank number is %d out of %d\n", rank, size);
+    printf("My rank number is %d\n", rank);
 
     // Call finalize at the end
     return MPI_Finalize();
 }
 ~~~
 {: .language-c}
+
+TODO: consider getting COMM_size to example above, adding to printf
 
 > ## Compile and Run
 >
