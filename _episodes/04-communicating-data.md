@@ -118,7 +118,7 @@ crashed rank.
 {: .callout}
 
 Blocking communication works best when the work is balanced across ranks, so that each rank has an equal amount of
-things to do. A common pattern in scientific pattern is to split a calculation across a grid and then to share the
+things to do. A common pattern in scientific computing is to split a calculation across a grid and then to share the
 results between all ranks before moving onto the next calculation. If the workload is well balanced, each rank will
 finish at roughly the same time and be ready to transfer data at the same time. But, as shown in the diagram below, if
 the workload is unbalanced, some ranks will finish their calculations earlier and begin to send their data to the other

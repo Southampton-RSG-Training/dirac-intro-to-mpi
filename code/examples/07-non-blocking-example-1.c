@@ -1,36 +1,48 @@
 #include <mpi.h>
 #include <stdio.h>
+#include <unistd.h>
 
-#define MESSAGE_SIZE 16
-#define DEFAULT_TAG 0
+#define ARRAY_SIZE 5
 
 int main(int argc, char **argv)
 {
-    MPI_Init(&argc, &argv);
-
     int my_rank;
     int num_ranks;
+    MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    if (num_ranks < 2) {
-        printf("This example requires at least two ranks\n");
+    if (num_ranks != 2) {
+        if (my_rank == 0) {
+            printf("This example requires two ranks\n");
+        }
         MPI_Finalize();
         return 1;
     }
 
+    MPI_Status status;
     MPI_Request request;
-    char message[MESSAGE_SIZE] = "Hello, world!";
+
+    int buffer[ARRAY_SIZE];
 
     if (my_rank == 0) {
-        for (int i = 1; i < num_ranks; ++i) {
-            MPI_Isend(message, MESSAGE_SIZE, MPI_CHAR, i, DEFAULT_TAG, MPI_COMM_WORLD, &request);
+        /* Fill the buffer with some junk */
+        for (int i = 0; i < ARRAY_SIZE; ++i) {
+            buffer[i] = my_rank + i;
         }
-    } else {
-        MPI_Status status;
-        MPI_Irecv(message, MESSAGE_SIZE, MPI_CHAR, 0, DEFAULT_TAG, MPI_COMM_WORLD, &request);
+
+        /* Send it to rank 1*/
+        MPI_Isend(buffer, ARRAY_SIZE, MPI_INT, 1, 0, MPI_COMM_WORLD, &request);
+        /* Wait, to ensure the buffer is ready for re-use */
         MPI_Wait(&request, &status);
-        printf("Rank %d: message %s\n", my_rank, message);
+    } else {
+        MPI_Irecv(buffer, ARRAY_SIZE, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
+
+        for (int i = 0; i < ARRAY_SIZE; ++i) {
+            buffer[i] = my_rank + i;
+        }
+
+        MPI_Wait(&request, &status);
     }
 
     return MPI_Finalize();
