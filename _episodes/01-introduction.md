@@ -186,3 +186,13 @@ Now, let's take a brief look at these fundamental concepts and explore the diffe
 > access to data in memory can be synchronous or asynchronous. For the different dispensers case for your workers, however,
 > think of the memory distributed on each node/computer of a cluster.
 {: .prereq}
+
+## MPI vs OpenMP
+
+|   MPI   |  OpenMP   |
+|---------|-----------|
+|Defines an API, vendors provide an optimized (usually binary) library implementation that is linked using your choice of compiler.|OpenMP is integrated into the compiler (e.g., gcc) and does not offer much flexibility in terms of changing compilers or operating systems unless there is an OpenMP compiler available for the specific platform.|
+|Offers support for C, C++, Fortran, and other languages, making it relatively easy to port code by developing a wrapper API interface for a pre-compiled MPI implementation in a different language.|Primarily supports C, C++, and Fortran, with limited options for other programming languages.|
+|Suitable for both distributed memory and shared memory (e.g., SMP) systems, allowing for parallelization across multiple nodes.|Designed for shared memory systems and cannot be used for parallelization across multiple computers.|
+|Enables parallelism through both processes and threads, providing flexibility for different parallel programming approaches.|Focuses solely on thread-based parallelism, limiting its scope to shared memory environments.|
+|Creation of process/thread instances and communication can result in higher costs and overhead.|Offers lower overhead, as inter-process communication is handled through shared memory, reducing the need for expensive process/thread creation.|
