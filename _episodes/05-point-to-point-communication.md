@@ -9,38 +9,36 @@ objectives:
 - Describe what is meant by point-to-point communication.
 - Learn how to send and receive data between ranks.
 keypoints:
-- Use `MPI_SSend`, `MPI_Send` and `MPI_Recv` to send and receive data between ranks
+- Use `MPI_Send` and `MPI_Recv` to send and receive data between ranks
 - Using `MPI_SSend` will always block the sending rank until the message is received
 - Using `MPI_Send` may block the sending rank until the message is received, depending on whether the message is buffered and the buffer is available for reuse
 - Using `MPI_Recv` will always block the receiving rank until the message is received
 ---
 
 In the previous episode we introduced the various types of communication in MPI.
-In this section we will use the MPI library functions `MPI_Ssend` and
+In this section we will use the MPI library functions `MPI_Send` and
 `MPI_Recv`, which employ point-to-point communication, to send data from one rank to another. 
-We will also briefly introduce `MPI_Send`, which is similar to `MPI_Ssend` but may buffer the
-sending of the message to the receiver, and potentially allow the sending rank to continue.
 
 <img src="fig/send-recv.png" alt="Sending data from one rank to another using MPI_SSend and MPI_Recv"/>
 
-Let's look at how `MPI_SSend` and `MPI_Recv`are typically used:
+Let's look at how `MPI_Send` and `MPI_Recv`are typically used:
 
 - Rank A decides to send data to rank B. It first packs the data to send into a buffer, from which it will be taken.
-- Rank A then calls `MPI_Ssend` to create a message for rank B. The underlying MPI communication 
+- Rank A then calls `MPI_Send` to create a message for rank B. The underlying MPI communication 
 is then given the responsibility of routing the message to the correct destination.
 - Rank B must know that it is about to receive a message and acknowledge this
 by calling `MPI_Recv`. This sets up a buffer for writing the incoming data when it arrives
 and instructs the communication device to listen for the message.
 
-As mentioned in the previous episode, `MPI_Ssend` and `MPI_Recv` are *synchronous* operations, 
+As mentioned in the previous episode, `MPI_Send` and `MPI_Recv` are *synchronous* operations, 
 and will not return until the communication on both sides is complete.
 
-## Sending a Message: MPI_Ssend
+## Sending a Message: MPI_Send
 
-The `MPI_Ssend` function is defined as follows:
+The `MPI_Send` function is defined as follows:
 
 ~~~
-int MPI_Ssend(
+int MPI_Send(
     const void* data,
     int count,
     MPI_Datatype datatype,
@@ -65,7 +63,7 @@ For example, if we wanted to send a message that contains `"Hello, world!\n"` fr
 
 ~~~
 char *message = "Hello, world!\n";
-MPI_Ssend(message, 14, MPI_CHAR, 1, 0, MPI_COMM_WORLD);
+MPI_Send(message, 14, MPI_CHAR, 1, 0, MPI_COMM_WORLD);
 ~~~
 {: .language-c}
 
@@ -73,10 +71,23 @@ So we are sending 14 elements of `MPI_CHAR` one time, and specified `0` for our 
 having to send more than one type of message. This call is synchronous, and will block until the corresponding
 `MPI_Recv` operation receives and acknowledges receipt of the message.
 
-> ## MPI_Send: an Alternative to MPI_Ssend
+> ## MPI_Ssend: an Alternative to MPI_Send
 >
-> An alternative to `MPI_Ssend` is to use `MPI_Send`, which 
-> In the previous episode we also introduced the use of non-blocking communication, where the
+> `MPI_Send` represents the "standard mode" of sending messages to other ranks, but some aspects of its behaviour
+> are dependent on both the implementation of MPI being used, and the circumstances of its use: there are three 
+> scenarios to consider:
+> 
+> 1. The message is directly passed to the receive buffer, in which case the communication has completed
+> 2. The send message is buffered within some internal MPI buffer but hasn't yet been received
+> 3. The function call waits for a corresponding receiving process
+> 
+> In scenarios 1 & 2, the call is able to return immediately, but with 3 it may block until the recipient is ready to
+> receive. It is dependent on the MPI implementation as to what scenario is selected, based on performance, memory,
+> and other considerations.
+> 
+> A very similar alternative to `MPI_Send` is to use `MPI_Ssend` - synchronous send - which ensures the communication
+> is both synchronous and blocking. This function guarantees that when it returns, the destination has categorically
+> started receiving the message.
 {: .callout}
 
 
@@ -203,7 +214,7 @@ int main(int argc, char** argv) {
 > > ## Solution
 > > 
 > > 1. The program will hang since it's waiting for a message with a tag that will never be sent (press `Ctrl-C` to kill
-> > the hanging process). To resolve this, make the tag in `MPI_Recv` match the tag you specified in `MPI_Ssend`.
+> > the hanging process). To resolve this, make the tag in `MPI_Recv` match the tag you specified in `MPI_Send`.
 > > 2. You will likely see a message like the following:
 > >    ~~~
 > >    [...:220695] *** An error occurred in MPI_Recv
@@ -256,7 +267,7 @@ int main(int argc, char** argv) {
 >>
 >>        if( rank%2 == 0 ){
 >>            char *message = "Hello, world!\n";
->>            MPI_Ssend(message, 14, MPI_CHAR, my_pair, 0, MPI_COMM_WORLD);
+>>            MPI_Send(message, 14, MPI_CHAR, my_pair, 0, MPI_COMM_WORLD);
 >>        }
 >>   
 >>        if( rank%2 == 1 ){
@@ -320,7 +331,7 @@ int main(int argc, char** argv) {
 >>  
 >>        char message[30];
 >>        sprintf(message, "Hello World, I'm rank %d\n", rank);
->>        MPI_Ssend(message, 30, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
+>>        MPI_Send(message, 30, MPI_CHAR, 0, 0, MPI_COMM_WORLD);
 >>  
 >>     } else {
 >>        // Rank 0 will receive each message and print them
@@ -392,7 +403,7 @@ TODO: consider switching exercise below to using Ed's example blocking code (in 
 >     }
 >
 >     // Send the message to other rank
->     MPI_Ssend(send_message, n_numbers, MPI_INT, neighbour, 0, MPI_COMM_WORLD);
+>     MPI_Send(send_message, n_numbers, MPI_INT, neighbour, 0, MPI_COMM_WORLD);
 >
 >     // Receive the message from the other rank
 >     MPI_Recv(recv_message, n_numbers, MPI_INT, neighbour, 0, MPI_COMM_WORLD, &status);
