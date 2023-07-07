@@ -176,9 +176,13 @@ int MPI_Scatter(
 );
 ```
 
-The data to be *scattered* is split into even chunks,
-
-The code example below shows how you might use `MPI_Scatter()`
+The data to be *scattered* is split into even chunks of size `sendcount`. So, for example, if `sendcount` is 2 and
+`sendtype` is `MPI_INT`, then each rank will receive two integers. The values for `recvcount` and `recvtype` are the
+same as `sendcount` and `sendtype`. If the total amount of data is not evenly divisible by the number of processes,
+`MPI_Scatter()` will not work. In this case, we need to use
+[`MPI_Scatterv()`](https://www.open-mpi.org/doc/v4.0/man3/MPI_Scatterv.3.php) instead to specify the amount of data each
+rank will receive. The code example below shows `MPI_Scatter()` being used to send data which has been initialised only
+on the root rank.
 
 
 ```c
@@ -191,34 +195,26 @@ if (my_rank == ROOT_RANK) {
 }
 
 /* Calculate the elements of data each rank will get, and allocate space for
-   the receive buffer */
+   the receive buffer -- we are assuming NUM_DATA_POINTS is divisible by num_ranks */
 int num_per_rank = NUM_DATA_POINTS / num_ranks;
-int scattered_data_for_rank = malloc(num_per_rank * sizeof(int));
+int *scattered_data_for_rank = malloc(num_per_rank * sizeof(int));
 
 /* Using a single function call, the data has been split and communicated evenly between all ranks */
 MPI_Scatter(send_data, num_per_rank, MPI_INT, scattered_data_for_rank, num_per_rank, MPI_INT, ROOT_RANK, MPI_COMM_WORLD);
 ```
 
-The data to be *scattered* is split into chunks of equal size
-
-
-The data in the `sendbuf` on rank `root` is split into chunks
-and each chunk is sent to a different rank.
-Each chunk contains `sendcount` elements of type `sendtype`.
-So if `sendtype` is `MPI_Int`, and `sendcount` is 2,
-each rank will receive 2 integers.
-The received data is written to the `recvbuf`, so the `sendbuf` is only
-needed by the `root`.
-The next two parameters, `recvcount` and `recvtype` describe the receive buffer.
-Usually `recvtype` is the same as `sendtype` and `recvcount` is `Nranks*sendcount`.
-
-If the total amount of data is not evenly divisible by the number of processes, `MPI_Scatter()` will not work. In this
-case, we need to use [`MPI_Scatterv()`](https://www.open-mpi.org/doc/v4.0/man3/MPI_Scatterv.3.php) instead to specify
-the amount of data each rank will receive.
-
 ## All-To-One
 
 ### Gather
+
+The opposite of *scattering* data across ranks, is to gather data to a single rank. To do such a thing, we can use the
+collective function `MPI_Gather()`. We can think of `MPI_Gather()` as really being the inverse of `MPI_Scatter()`. This
+is shown in the diagram below, where data from each rank on the left is sent to the root rank (rank 0) on the right.
+
+![Each rank sending a piece of data to root rank](fig/gather.png)
+
+The similarity between `MPI_Gather()` and `MPI_Scatter()` is also reflected by the fact that both functions have the
+same arguments,
 
 ```c
 int MPI_Gather(
@@ -233,13 +229,22 @@ int MPI_Gather(
 );
 ```
 
-![Each rank sending a piece of data to root rank]({{ page.root }}{% link fig/gather.png %})
+```c
+int rank_data[NUM_DATA_POINTS];
 
-Each rank sends the data in the `sendbuf` to rank `root`.
-The `root` collects the data into the `recvbuffer` in order of the rank
-numbers.
+/* Each rank generates some data, including the root rank */
+for (int i = 0; i < NUM_DATA_POINTS; ++i) {
+    rank_data[i] = (rank + 1) * (i + 1);
+}
 
----
+/* To gather all of the data, we need a buffer to store it. To make sure we have enough
+   space, we need to make sure we allocate enough memory on the root rank */
+int *gathered_data = malloc(NUM_DATA_POINTS * num_ranks * sizeof(int));
+
+/* */
+MPI_Gather(rank_data, NUM_DATA_POINTS, MPI_INT, gathered_data, NUM_DATA_POINTS, MPI_INT, 0, MPI_COMM_WORLD);
+```
+
 
 ### Reduce
 
@@ -263,12 +268,14 @@ all the ranks.
 
 Possible operations include:
 
-* `MPI_SUM`: Calculate the sum of numbers sent by each rank.
-* `MPI_MAX`: Return the maximum value of numbers sent by each rank.
-* `MPI_MIN`: Return the minimum of numbers sent by each rank.
-* `MPI_PROD`: Calculate the product of numbers sent by each rank.
-* `MPI_MAXLOC`: Return the maximum value and the number of the rank that sent the maximum value.
-* `MPI_MINLOC`: Return the minimum value of the number of the rank that sent the minimum value.
+| Operation | Description |
+| - | - |
+| `MPI_SUM`| Calculate the sum of numbers sent by each rank. |
+| `MPI_MAX`| Return the maximum value of numbers sent by each rank. |
+| `MPI_MIN`| Return the minimum of numbers sent by each rank. |
+| `MPI_PROD` | Calculate the product of numbers sent by each rank. |
+| `MPI_MAXLOC` | Return the maximum value and the number of the rank that sent the maximum value. |
+| `MPI_MINLOC` | Return the minimum value of the number of the rank that sent the minimum value. |
 
 In Python, these operations are named ``MPI.SUM``, ``MPI.MAX``, ``MPI.MIN``, and so on.
 {: .show-python}
