@@ -14,9 +14,12 @@ _site
 .vendor/
 vendor/
 .docker-vendor/
-Gemfile.lock
 .*history
 .idea/
 venv/
 .venv/
-assets/favicons/temp/
+.vscode
+setup.md
+_includes/
+.gitmodules
+submodules/
