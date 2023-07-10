@@ -3,6 +3,7 @@ title: "Introduction to Parallelism"
 slug: "dirac-intro-to-mpi-distributed-memory"
 teaching: 15
 exercises: 0
+math: true
 questions:
 - What is parallelisation and parallel programming?
 - How do MPI and OpenMP differ?
