@@ -1,7 +1,7 @@
 ---
 title: "Introduction to Parallelism"
 slug: "dirac-intro-to-mpi-distributed-memory"
-teaching: 20
+teaching: 15
 exercises: 0
 questions:
 - What is parallelisation and parallel programming?
