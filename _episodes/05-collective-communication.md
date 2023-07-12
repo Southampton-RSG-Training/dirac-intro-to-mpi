@@ -13,12 +13,11 @@ keypoints:
 - It's far more efficient to send/receive data to/from multiple ranks by using collective operations
 ---
 
-The previous episode showed how to send data from one rank to another, using point-to-point communication functions such
-as `MPI_Ssend` and `MPI_Send`. If we wanted to send data from multiple ranks to a single rank to, for example, perform a
-reduction to sum a number calculated on multiple ranks, we have to manually loop over each rank to send and receive the
-data. This type of communication, where multiple ranks talk to one another, is called *collective communication*. The
-code example below shows an example below of summing the number of each rank (on rank 0) and sending the sum to every
-rank.
+The previous episode showed how to send data from one rank to another using point-to-point communication. If we wanted
+to send data from multiple ranks to a single rank to, for example, add up the value of a variable across multiple ranks,
+we have to manually loop over each rank to communicatethe data. This type of communication, where multiple ranks talk to
+one another known as called *collective communication*. In the code example below, point-to-point communication is used
+to calculate the sum of the rank numbers,
 
 ```c
 MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -48,16 +47,15 @@ if (my_rank == 0) {
 printf("Rank %d has a sum of %d\n", my_rank, sum);
 ```
 
-The above code works perfectly fine for its use case, but isn't very efficient when you start needing to transfer large
-amounts of data, have lots of ranks, or when the workload across ranks is uneven with blocking communication. It's also
-a lot of code to do not much, and is easy to make a mistake. A common mistake would be starting the loops over ranks
-starting at rank 0, which would create a deadlock!
+For it's use case, the code above works perfectly fine. However, it isn't very efficient when you need to communicate
+large amounts of data, have lots of ranks, or when the workload is uneven (due to the blocking communication). It's also
+a lot of code to do not much, which makes it easy to introduce mistakes in our code. A common mistake in this example
+would be to start the loop over ranks from 0, which would cause a deadlock!
 
-But we don't need to write code like this, not unless we want complete control over all communication. MPI has
-implemented collective communications since it's earliest versions. The code above can be reproduced by a single
-function call to a collective operation, which abstracts away the communication and simplifies the code we write.
-Collective operations are also implemented far more efficiently than we could with the point-to-point communication
-functions.
+We don't need to write code like this (unless we want *complete* control over the data communication), because MPI has
+access to collective communication functions to abstract all of this code for us. The above code can be replaced by a
+single collective communiucation function. Collection operations are also implemented far more efficiently in the MPI
+library than we could ever write using point-to-point communications.
 
 There are several collective operations that are implemented in the MPI standard. The most commonly-used are:
 
@@ -75,26 +73,23 @@ There are several collective operations that are implemented in the MPI standard
 The most simple form of collective communication is a barrier. Barriers are used to synchronise ranks by adding a point
 in a program where ranks *must* wait until all ranks have reached the same point. A barrier is a collective operation
 because all ranks need to communicate with one another to know when they can leave the barrier. To create a barrier, we
-use the `MPI_Barrier()` function, which has the following arguments,
-
+use the `MPI_Barrier()` function,
 ```c
 int MPI_Barrier(
     MPI_Comm communicator  /* The communicator we want to add a barrier for */
 );
 ```
 
-When a rank reaches a barrier, it will stop executing any code and wait for all the other ranks to catch up and hit the
-barrier as well. As ranks waiting at a barrier aren't doing anything, barriers should be used sparingly to avoid large
-synchronisation overheads which will affect the scalability of our program. We should also avoid using barriers in parts
-of our program has have complicated branches, as we may introduce a deadlock by having a barrier in only one branch and
-not all branches.
+When a rank reaches a barrier, it will pause and wait for all the other ranks to catch up and reach the barrier as well.
+As ranks waiting at a barrier aren't doing anything, barriers should be used sparingly to avoid large synchronisation
+overheads, which affects the scalability of our program. We should also avoid using barriers in parts of our program
+has have complicated branches, as we may introduce a deadlock by having a barrier in only one branch.
 
 In practise, there are not that many practical use cases for a barrier in an MPI application. In a shared-memory
-environment, such as with OpenMP, synchronisation is important to ensure consistent and controlled access to shared
-data. But in MPI, where each rank has its own private memory space and often resources, it's very rare that we need to
-care about ranks becoming out-of-sync. However, there is one situation where a barrier useful which is when multiple
-ranks need to write *sequentially* to the same file. The code example below shows how you may handle this using a
-barrier.
+environment, synchronisation is important to ensure consistent and controlled access to shared data. But in MPI, where
+each rank has its own private memory space and often resources, it's rare that we need to care about ranks becoming
+out-of-sync. However, one usecase is when multiple ranks need to write *sequentially* to the same file. The code example
+below shows how you may handle this by using a barrier.
 
 ```c
 for (int i = 0; i < num_ranks; ++i) {
@@ -109,10 +104,10 @@ for (int i = 0; i < num_ranks; ++i) {
 
 ### Broadcast
 
-There are lot of situations where we'll need to get data from one rank to multiple ranks. One approach, which is not
-very efficient, is to create a loop and use `MPI_Send()` to send the data to each rank one by one (like in the example
-shown at the start of this episode). But a far more efficient approach is to *broadcast* the data to all ranks all at
-once. We can do this by using the `MPI_Bcast()` function,
+We'll often find that we need to data from one rank to all the other ranks. One approach, which is not very efficient,
+is to use `MPI_Send()` in a loop to send the data from rank to rank one by one. A far more efficient approach is to use
+the collective function `MPI_Bcast()` to *broadcast* the data from a root rank to every other rank. The `MPI_Bcast()`
+function has the following arguments,
 
 ```c
 int MPI_Bcast(
@@ -124,17 +119,17 @@ int MPI_Bcast(
 );
 ```
 
-`MPI_Bcast()` is very similar to the `MPI_Send()` function. The only functional difference is that `MPI_Bcast()` sends
-the data to all ranks (other than itself, where the data already is) instead of a single rank. This is shown in the
+`MPI_Bcast()` is similar to the `MPI_Send()` function. The meain functional difference is that `MPI_Bcast()` sends
+the data to all ranks (other than itself, where the data already is) instead of a single rank, as shown in the
 diagram below.
 
 ![Each rank sending a piece of data to root rank](fig/broadcast.png)
 
-There are many use cases for broadcasting data from one rank to every other rank. One such case if when data is sent
-back to a "root" rank to process, which then broadcasts the results back out to all ranks. Another example, shown in the
-code exert below, is to read data in on a single rank and to broadcast the data from that file to other ranks. This can
-be a useful pattern on some systems where there are not enough resources (filesystem bandwidth, limited concurrent I/O
-operations) for all ranks to read the file at once.
+There are lots of use cases for broadcasting data. One common case is when data is sent back to a "root" rank to
+process, which then broadcasts the results back out to all the other ranks. Another example, shown in the code exert
+below, is to read data in on the root rank and to broadcast it out. This is useful pattern on some systems where there
+are not enough resources (filesystem bandwidth, limited concurrent I/O operations) for every ranks to read the file at
+once.
 
 ```c
 int data_from_file[NUM_POINTS]
@@ -152,12 +147,11 @@ MPI_Bcast(data_from_file, NUM_POINTS, MPI_INT, 0, MPI_COMM_WORLD);
 
 ### Scatter
 
-If we need to process a large amount of data, one way to parallelise the workload is to have each rank in our program
-process a subset set of the data. But to do this, we need to send each rank the subset of data it needs to process. One
-approach to doing this would be to have a "root" process which prepares the data and sends it to each rank. The data
-could be communicated *manually* using point-to-point communication, but it's much easier, and faster, to use a single
-collective communication function for doing this: `MPI_Scatter()`. We can use `MPI_Scatter()` to split and send
-**equal** amounts of data from one rank to every rank in a communicator, as shown in the diagram below.
+One way to parallelise processing amount of data is to have ranks process a subset of the data. One method for
+distributing the data to each rank is to have a root rank which prepares the data, and then send the data to every rank.
+The communication could be done *manually* using point-to-point communication, but it's easier, and faster, to use a
+single collective communication. We can use `MPI_Scatter()` to split the data into *equal* sized chunks and communicate
+a diferent chunk to each rank, as shown in the diagram below.
 
 ![Each rank sending a piece of data to root rank](fig/scatter.png)
 
@@ -176,9 +170,9 @@ int MPI_Scatter(
 );
 ```
 
-The data to be *scattered* is split into even chunks of size `sendcount`. So, for example, if `sendcount` is 2 and
-`sendtype` is `MPI_INT`, then each rank will receive two integers. The values for `recvcount` and `recvtype` are the
-same as `sendcount` and `sendtype`. If the total amount of data is not evenly divisible by the number of processes,
+The data to be *scattered* is split into even chunks of size `sendcount`. If `sendcount` is 2 and `sendtype` is
+`MPI_INT`, then each rank will receive two integers. The values for `recvcount` and `recvtype` are the same as
+`sendcount` and `sendtype`. If the total amount of data is not evenly divisible by the number of processes,
 `MPI_Scatter()` will not work. In this case, we need to use
 [`MPI_Scatterv()`](https://www.open-mpi.org/doc/v4.0/man3/MPI_Scatterv.3.php) instead to specify the amount of data each
 rank will receive. The code example below shows `MPI_Scatter()` being used to send data which has been initialised only
@@ -207,27 +201,31 @@ MPI_Scatter(send_data, num_per_rank, MPI_INT, scattered_data_for_rank, num_per_r
 
 ### Gather
 
-The opposite of *scattering* data across ranks, is to gather data to a single rank. To do such a thing, we can use the
-collective function `MPI_Gather()`. We can think of `MPI_Gather()` as really being the inverse of `MPI_Scatter()`. This
-is shown in the diagram below, where data from each rank on the left is sent to the root rank (rank 0) on the right.
-
-![Each rank sending a piece of data to root rank](fig/gather.png)
-
-The similarity between `MPI_Gather()` and `MPI_Scatter()` is also reflected by the fact that both functions have the
-same arguments,
+The opposite of scattering from one rank to multiple, is to gather data from multiple ranks into a single rank. We can
+do this by using the collection function `MPI_Gather()`, which has tue arguments,
 
 ```c
 int MPI_Gather(
-    void* sendbuf,          /* */
-    int sendcount,          /* */
-    MPI_Datatype sendtype,  /* */
-    void* recvbuffer,       /* */
-    int sendcount,          /* */
-    MPI_Datatype recvtype,  /* */
-    int root,               /* */
-    MPI_Comm comm           /* */
+    void* sendbuf,          /* The data to be sent to the root rank */
+    int sendcount,          /* The number of elements of data to be sent */
+    MPI_Datatype sendtype,  /* The data type of the data to be sent */
+    void* recvbuffer,       /* The buffer to put the gathered data into (only important for the root rank) */
+    int recvcount,          /* Same as sendcount (only important for the root rank) */
+    MPI_Datatype recvtype,  /* Same as sendtype (import important for the root rank) */
+    int root,               /* The ID of the root rank, where data is being gathered to */
+    MPI_Comm comm           /* The communicator involved */
 );
 ```
+
+The receive buffer needs to be large enough to hold data data from all of the ranks. For example, if there are 4 ranks
+sending 10 integers, then `recvbuffer` needs to be able to store *at least* 40 integers. We can think of `MPI_Gather()`
+as being the inverse of `MPI_Scatter()`. This is shown in the diagram below, where data from each rank on the left is
+sent to the root rank (rank 0) on the right.
+
+![Each rank sending a piece of data to root rank](fig/gather.png)
+
+In the code example below, `MPI_Gather()` is used to gather the contents of `rank_data` from each rank, to rank 0 (the
+root rank).
 
 ```c
 int rank_data[NUM_DATA_POINTS];
@@ -239,34 +237,79 @@ for (int i = 0; i < NUM_DATA_POINTS; ++i) {
 
 /* To gather all of the data, we need a buffer to store it. To make sure we have enough
    space, we need to make sure we allocate enough memory on the root rank */
-int *gathered_data = malloc(NUM_DATA_POINTS * num_ranks * sizeof(int));
+int recv_count = NUM_DATA_POINTS * num_ranks;
+int *gathered_data = malloc(recv_count * sizeof(int));
 
-/* */
+/* MPI_Gather is used in a similar way to MPI_Scatter. Note how that even though we have
+   allocated recv_count elements for *gathered_data, MPI_Gather has recv_count set to
+   NUM_DATA_POINTS. This is because we are expecting to receive that many elements from
+   each rank */
 MPI_Gather(rank_data, NUM_DATA_POINTS, MPI_INT, gathered_data, NUM_DATA_POINTS, MPI_INT, 0, MPI_COMM_WORLD);
 ```
 
+> ## Gathering greetings
+>
+> In the previous episode, we used point-to-point communication to send a greeting message to rank 0 from every other
+> rank. Instead of using point-to-point communication functions, re-implement your solution using `MPI_Gather()`
+> instead. You can use [this code](code/solutions/05-hello-gather-skeleton.c) as your starting point.
+>
+> > ## Solution
+> >
+> > ```c
+> > #include <mpi.h>
+> > #include <stdio.h>
+> > #include <stdlib.h>
+> >
+> > #define NUM_CHARS 32
+> >
+> > int main(int argc, char **argv) {
+> >     int my_rank, num_ranks;
+> >     MPI_Init(&argc, &argv);
+> >     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+> >     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+> >
+> >     char message[NUM_CHARS];
+> >     snprintf(message, NUM_CHARS, "Hello from rank %d", my_rank);
+> >
+> >     char *recv_buffer = malloc(NUM_CHARS * num_ranks * sizeof(char));
+> >     MPI_Gather(message, NUM_CHARS, MPI_CHAR, recv_buffer, NUM_CHARS, MPI_CHAR, 0, MPI_COMM_WORLD);
+> >
+> >     if (my_rank == 0) {
+> >         for (int i = 0; i < num_ranks; ++i) { /* snprintf null terminates strings */
+> >             printf("%s\n", &recv_buffer[i * NUM_CHARS]);
+> >         }
+> >     }
+> >
+> >     free(recv_buffer);
+> >
+> >     return MPI_Finalize();
+> > }
+> > ```
+> >
+> {: .solution}
+>
+{: .challenge}
 
 ### Reduce
 
+A reduction operation is one which takes a values across the ranks, and combines them into a single value. Reductions
+are probably the most common collective operation you will use. The example at the beginning of this episode was a
+reduction operation, summing up a bunch of numbers, implemented using point-to-point communication. Reduction operations
+can be done using the collection function `MPI_Reduce()`, which has the following arguments,
+
 ```c
 int MPI_Reduce(
-    void* sendbuf,          /* */
-    void* recvbuffer,       /* */
-    int count,              /* */
-    MPI_Datatype datatype,  /* */
-    MPI_Op op,              /* */
-    int root,               /* */
-    MPI_Comm comm           /* */
+    void* sendbuf,          /* The data to be sent to a root rank for processing */
+    void* recvbuffer,       /* The buffer which will contain the reduction output */
+    int count,              /* The number of elements of data to be reduced */
+    MPI_Datatype datatype,  /* The data type of the data */
+    MPI_Op op,              /* The reduction operation to perform */
+    int root,               /* The root rank, to perform the reduction on */
+    MPI_Comm comm           /* The communicator where the reduction will be performed */
 );
 ```
 
-![Each rank sending a piece of data to root rank]({{ page.root }}{% link fig/reduction.png %})
-
-Each rank sends a piece of data, which are combined on their way to rank `root` into a single piece of data.
-For example, the function can calculate the sum of numbers distributed across
-all the ranks.
-
-Possible operations include:
+The `op` argument controls which reduction operation is carried out, from the following possible operations:
 
 | Operation | Description |
 | - | - |
@@ -277,24 +320,27 @@ Possible operations include:
 | `MPI_MAXLOC` | Return the maximum value and the number of the rank that sent the maximum value. |
 | `MPI_MINLOC` | Return the minimum value of the number of the rank that sent the minimum value. |
 
-In Python, these operations are named ``MPI.SUM``, ``MPI.MAX``, ``MPI.MIN``, and so on.
-{: .show-python}
+In a reduction operation, each ranks sends a piece of data to the root rank, which are combined, depending on the choice
+of operation, into a single value on the root rank, as shown in the diagram below. Since the data is sent and operation
+done on the root rank, it means the reduced value is only available on the root rank.
 
-The `MPI_Reduce` operation is usually faster than what you might write by hand.
-It can apply different algorithms depending on the system it's running on to reach the best
-possible performance.
-This is particularly the case on systems designed for high performance computing,
-where the `MPI_Reduce` operations
-can use the communication devices to perform reductions en route, without using any
-of the ranks to do the calculation.
+![Each rank sending a piece of data to root rank](fig/reduction.png)
 
-> ## In-place operations
->
-> ```c
-> MPI_Reduce(&sendbuf, MPI_IN_PLACE, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-> ```
->
-{: .callout}
+By using `MPI_Reduce()`, we can refactor the first code example into two collective functions,
+
+```c
+MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+
+int sum;
+
+MPI_Reduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+MPI_Bcast(&sum, 1, MPI_INT, 0, MPI_COMM_WORLD); /* Using MPI_Bcast to send the reduced value to every rank */
+
+printf("Rank %d has a sum of %d\n", my_rank, sum);
+```
+
+
 
 ## All-to-All
 
@@ -324,54 +370,14 @@ MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 /* This one function replaces the entire if statement in the first example */
 MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 ```
-
----
-
-> ## Sending and Receiving
+> ## In-place operations
 >
-> In the morning we wrote a hello world program where each rank
-> sends a message to rank 0.
-> Write this using a gather instead of send and receive.
+> ```c
+> sum = my_rank;
+> MPI_Allreduce(MPI_IN_PLACE, &sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
+> ```
 >
->> ## Solution
->>
->> ```c
->>#include <stdio.h>
->>#include <stdlib.h>
->>#include <mpi.h>
->>
->>int main(int argc, char** argv) {
->>  int rank, n_ranks, numbers_per_rank;
->>  char send_message[40], *receive_message;
->>
->>  // First call MPI_Init
->>  MPI_Init(&argc, &argv);
->>  // Get my rank and the number of ranks
->>  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
->>  MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
->>
->>  // Allocate space for all received messages in receive_message
->>  receive_message = malloc( n_ranks*40*sizeof(char) );
->>
->>  //Use gather to send all messages to rank 0
->>  sprintf(send_message, "Hello World, I'm rank %d\n", rank);
->>  MPI_Gather( send_message, 40, MPI_CHAR, receive_message, 40, MPI_CHAR, 0, MPI_COMM_WORLD );
->>
->>  if(rank == 0){
->>     for( int i=0; i<n_ranks; i++){
->>       printf("%s", receive_message + i*40);
->>     }
->>  }
->>
->>  // Free memory and finalise
->>  free( receive_message );
->>  return MPI_Finalize();
->>}
->> ```
->>
-> {: .solution}
->
-{: .challenge}
+{: .callout}
 
 > ## Reductions
 >
