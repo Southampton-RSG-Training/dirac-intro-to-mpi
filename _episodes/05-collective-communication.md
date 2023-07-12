@@ -144,6 +144,42 @@ if (my_rank == 0) {
 /* Use MPI_Bcast to send the data to every other rank */
 MPI_Bcast(data_from_file, NUM_POINTS, MPI_INT, 0, MPI_COMM_WORLD);
 ```
+> ## Sending greetings
+>
+> Send a message from rank 0 saying "Hello from rank 0" to all ranks using `MPI_Bcast()`.
+>
+> > ## Solution
+> >
+> > ```c
+> > #include <mpi.h>
+> > #include <stdio.h>
+> > #include <string.h>
+> >
+> > #define NUM_CHARS 32
+> >
+> > int main(int argc, char **argv) {
+> >     int my_rank, num_ranks;
+> >     MPI_Init(&argc, &argv);
+> >     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+> >     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+> >
+> >     char message[NUM_CHARS];
+> >
+> >     if (my_rank == 0) {
+> >         strcpy(message, "Hello from rank 0");
+> >     }
+> >
+> >     MPI_Bcast(message, NUM_CHARS, MPI_CHAR, 0, MPI_COMM_WORLD);
+> >
+> >     printf("I'm rank %d and I got the message '%s'\n", my_rank, message);
+> >
+> >     return MPI_Finalize();
+> > }
+> > ```
+> >
+> {: .solution}
+>
+{: .challenge}
 
 ### Scatter
 
@@ -326,7 +362,7 @@ done on the root rank, it means the reduced value is only available on the root 
 
 ![Each rank sending a piece of data to root rank](fig/reduction.png)
 
-By using `MPI_Reduce()`, we can refactor the first code example into two collective functions,
+By using `MPI_Reduce()` and `MPI_Bcast()`, we can refactor the first code example into two collective functions,
 
 ```c
 MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
