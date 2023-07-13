@@ -59,12 +59,12 @@ library than we could ever write using point-to-point communications.
 
 There are several collective operations that are implemented in the MPI standard. The most commonly-used are:
 
-| Type | Description |
-| - | - |
+| Type            | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
 | Synchronisation | Wait until all processes have reached the same point in the program. |
-| One-To-All | One rank sends the same message to all other ranks. |
-| All-to-One | All ranks send data to a single rank. |
-| All-to-All | All ranks have data and all ranks receive data. |
+| One-To-All      | One rank sends the same message to all other ranks.                  |
+| All-to-One      | All ranks send data to a single rank.                                |
+| All-to-All      | All ranks have data and all ranks receive data.                      |
 
 ## Synchronisation
 
@@ -74,6 +74,7 @@ The most simple form of collective communication is a barrier. Barriers are used
 in a program where ranks *must* wait until all ranks have reached the same point. A barrier is a collective operation
 because all ranks need to communicate with one another to know when they can leave the barrier. To create a barrier, we
 use the `MPI_Barrier()` function,
+
 ```c
 int MPI_Barrier(
     MPI_Comm communicator  /* The communicator we want to add a barrier for */
@@ -115,7 +116,7 @@ int MPI_Bcast(
     int count,              /* The number of elements of data */
     MPI_Datatype datatype,  /* The data type of the data */
     int root,               /* The rank which the data should be sent from */
-    MPI_Comm comm           /* The communicator to handle the communication */
+    MPI_Comm comm           /* The communicator containing the ranks to broadcast to */
 );
 ```
 
@@ -144,6 +145,7 @@ if (my_rank == 0) {
 /* Use MPI_Bcast to send the data to every other rank */
 MPI_Bcast(data_from_file, NUM_POINTS, MPI_INT, 0, MPI_COMM_WORLD);
 ```
+
 > ## Sending greetings
 >
 > Send a message from rank 0 saying "Hello from rank 0" to all ranks using `MPI_Bcast()`.
@@ -213,7 +215,6 @@ The data to be *scattered* is split into even chunks of size `sendcount`. If `se
 [`MPI_Scatterv()`](https://www.open-mpi.org/doc/v4.0/man3/MPI_Scatterv.3.php) instead to specify the amount of data each
 rank will receive. The code example below shows `MPI_Scatter()` being used to send data which has been initialised only
 on the root rank.
-
 
 ```c
 #define ROOT_RANK 0
@@ -335,7 +336,7 @@ can be done using the collection function `MPI_Reduce()`, which has the followin
 
 ```c
 int MPI_Reduce(
-    void* sendbuf,          /* The data to be sent to a root rank for processing */
+    void* sendbuf,          /* The data to be reduced on the root rank */
     void* recvbuffer,       /* The buffer which will contain the reduction output */
     int count,              /* The number of elements of data to be reduced */
     MPI_Datatype datatype,  /* The data type of the data */
@@ -347,14 +348,14 @@ int MPI_Reduce(
 
 The `op` argument controls which reduction operation is carried out, from the following possible operations:
 
-| Operation | Description |
-| - | - |
-| `MPI_SUM`| Calculate the sum of numbers sent by each rank. |
-| `MPI_MAX`| Return the maximum value of numbers sent by each rank. |
-| `MPI_MIN`| Return the minimum of numbers sent by each rank. |
-| `MPI_PROD` | Calculate the product of numbers sent by each rank. |
+| Operation    | Description                                                                      |
+| ------------ | -------------------------------------------------------------------------------- |
+| `MPI_SUM`    | Calculate the sum of numbers sent by each rank.                                  |
+| `MPI_MAX`    | Return the maximum value of numbers sent by each rank.                           |
+| `MPI_MIN`    | Return the minimum of numbers sent by each rank.                                 |
+| `MPI_PROD`   | Calculate the product of numbers sent by each rank.                              |
 | `MPI_MAXLOC` | Return the maximum value and the number of the rank that sent the maximum value. |
-| `MPI_MINLOC` | Return the minimum value of the number of the rank that sent the minimum value. |
+| `MPI_MINLOC` | Return the minimum value of the number of the rank that sent the minimum value.  |
 
 In a reduction operation, each ranks sends a piece of data to the root rank, which are combined, depending on the choice
 of operation, into a single value on the root rank, as shown in the diagram below. Since the data is sent and operation
@@ -365,53 +366,61 @@ done on the root rank, it means the reduced value is only available on the root 
 By using `MPI_Reduce()` and `MPI_Bcast()`, we can refactor the first code example into two collective functions,
 
 ```c
-MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
-
 int sum;
+MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
 MPI_Reduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
-MPI_Bcast(&sum, 1, MPI_INT, 0, MPI_COMM_WORLD); /* Using MPI_Bcast to send the reduced value to every rank */
-
-printf("Rank %d has a sum of %d\n", my_rank, sum);
+MPI_Bcast(&sum, 1, MPI_INT, 0, MPI_COMM_WORLD);  /* Using MPI_Bcast to send the reduced value to every rank */
 ```
-
-
 
 ## All-to-All
 
 ### Allreduce
 
+In the code example just above, after the reduction operation we used `MPI_Bcast()` to communicate the result to every
+rank in the communicator. This is a common pattern, so much so that there is a collective operation which does both in a
+single function call,
+
 ```c
 int MPI_Allreduce(
-    void* sendbuf,          /* */
-    void* recvbuffer,       /* */
-    int count,              /* */
-    MPI_Datatype datatype,  /* */
-    MPI_Op op,              /* */
-    MPI_Comm comm           /* */
+    void* sendbuf,          /* The data to be reduced */
+    void* recvbuffer,       /* The buffer which will contain the reduction output */
+    int count,              /* The number of elements of data to be reduced */
+    MPI_Datatype datatype,  /* The data type of the data */
+    MPI_Op op,              /* The reduction operation to use */
+    MPI_Comm comm           /* The communicator where the reduction will be performed */
 );
 ```
 
-![Each rank sending a piece of data to root rank]({{ page.root }}{% link fig/allreduce.png %})
+![Each rank sending a piece of data to root rank](fig/allreduce.png)
 
-`MPI_Allreduce` performs essentially the same operations as `MPI_Reduce`,
-but the result is sent to all the ranks.
+`MPI_Allreduce()` performs the same operations as `MPI_Reduce()`, but the result is sent to all ranks rather than only
+being available on the root rank. This means we can remove the `MPI_Bcast()` in the previous code example and remove
+almost all of the code in the reduction example using point-to-point communication at the beginning of the episode. This
+is shown in the following code example.
 
 ```c
 int sum;
-int my_rank;
 MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-/* This one function replaces the entire if statement in the first example */
+/* MPI_Allreduce effectively replaces all of the code in the first example of this
+   episode, and is also faster */
 MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 ```
+
 > ## In-place operations
+>
+> In MPI, we can use in-place operations to eliminate the need for separate send and receive buffers in some collective
+> operations. We typically do this by using the `MPI_IN_PLACE` constant in place of the send buffer, as in the example
+> below using `MPI_Allreduce()`.
 >
 > ```c
 > sum = my_rank;
 > MPI_Allreduce(MPI_IN_PLACE, &sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 > ```
+>
+> Not all collective operations support in-place operations, and the usage of `MPI_IN_PLACE` can be different for the
+> other collective functions which support it.
 >
 {: .callout}
 
@@ -488,44 +497,53 @@ MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 > }
 > ```
 >
->> ## Solution
->>
->> ```c
->> // Calculate the sum of numbers in a vector
->> double find_sum( double * vector, int N ){
->>    double sum = 0;
->>    double global_sum;
->>
->>    // Calculate the sum on this rank as before
->>    for( int i=0; i<N; i++){
->>       sum += vector[i];
->>    }
->>
->>    // Call MPI_Allreduce to find the full sum
->>    MPI_Allreduce( &sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
->>
->>    return global_sum;
->> }
->>
->> // Find the maximum of numbers in a vector
->> double find_maximum( double * vector, int N ){
->>    double max = 0;
->>    double global_max;
->>
->>    // Calculate the sum on this rank as before
->>    for( int i=0; i<N; i++){
->>       if( vector[i] > max ){
->>          max = vector[i];
->>       }
->>    }
->>
->>    // Call MPI_Allreduce to find the maximum over all the ranks
->>    MPI_Allreduce( &max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD );
->>
->>    return global_max;
->> }
->> ```
->>
+> > ## Solution
+> >
+> > ```c
+> > // Calculate the sum of numbers in a vector
+> > double find_sum( double * vector, int N ){
+> >    double sum = 0;
+> >    double global_sum;
+> >
+> >    // Calculate the sum on this rank as before
+> >    for( int i=0; i<N; i++){
+> >       sum += vector[i];
+> >    }
+> >
+> >    // Call MPI_Allreduce to find the full sum
+> >    MPI_Allreduce( &sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
+> >
+> >    return global_sum;
+> > }
+> >
+> > // Find the maximum of numbers in a vector
+> > double find_maximum( double * vector, int N ){
+> >    double max = 0;
+> >    double global_max;
+> >
+> >    // Calculate the sum on this rank as before
+> >    for( int i=0; i<N; i++){
+> >       if( vector[i] > max ){
+> >          max = vector[i];
+> >       }
+> >    }
+> >
+> >    // Call MPI_Allreduce to find the maximum over all the ranks
+> >    MPI_Allreduce( &max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD );
+> >
+> >    return global_max;
+> > }
+> > ```
+> >
 > {: .solution}
 >
 {: .challenge}
+
+> ## More collective operations are available
+>
+> The collective functions introduced in this episode do not represent an exhaustive list of *all* collective operations
+> in MPI. There are a number which are not covered, as their usage is not as common. You can usually find a list of the
+> collective functions available for the implementation of MPI you choose to use, e.g. [Microsoft MPI documentation
+> ](https://learn.microsoft.com/en-us/message-passing-interface/mpi-collective-functions).
+>
+{: .callout}
