@@ -13,23 +13,15 @@ keypoints:
 - It's better to use collective operations, rather than implementing similar behaviour yourself
 ---
 
-## Communication Patterns in MPI
+We have now come across the basic building blocks we need to create an MPI application. The previous episodes have
+covered how to split tasks between ranks to parallelise the workload, and how to communicate data between ranks; either
+between two ranks (point-to-point) or multiple at once (collective). The next step is to build upon these basic blocks,
+and to think about how we should structure our communication. The parallelisation and communication strategy we choose
+will depend on the underlying problem and algorithm. For example, a grid based simulation (such as in computational
+fluid dynamics) will need to structure its communication differently to a simulation which does not discretise
+calculations onto a grid of points. In this episode, we will look at some of the most common communication patterns.
 
-In MPI parallelization we can make use of several different patterns of communication between ranks. If you decide it's
-worth your time to try to parallelise the problem, the next step is to decide how the ranks will share the tasks or the
-data. This should be done for each region separately, but taking into account the time it would take to reorganise the
-data if you decide to change the pattern between regions.
-
-The parallelisation strategy is often based on the underlying problem the algorithm is dealing with. For example, in
-materials science it makes sense to decompose the data into domains by splitting the physical volume of the material.
-
-Most programs will use the same pattern in every region. There is a cost to reorganising data, mostly having to do with
-communicating large blocks between ranks. This is really only a problem if done in a tight loop, many times per second.
-
-Let's take a look at these, and then decide which pattern (or patterns) will best suit the paralellisable regions of our
-code.
-
-### Gather / Scatter
+## Gather / Scatter
 
 In **gather communication**, all ranks send a piece of information to one rank.  Gathers are typically used when
 printing out information or writing to disk.  For example, each could send the result of a measurement to rank 0 and
@@ -47,18 +39,18 @@ also be produced by a previous computation.
 Gather and scatter operations require more communication as the number of ranks increases.  The amount of messages sent
 usually increases logarithmically with the number of ranks.  They have efficient implementations in the MPI libraries.
 
-### Halo Exchange
+## Halo Exchange
 
 A common feature of a domain decomposed algorithm is that communications are limited to a small number of other ranks
 that work on a domain a short distance away.  For example, in a simulation of atomic crystals, updating a single atom
 usually requires information from a couple of its nearest neighbours.
 
-![Depcition of halo exchange communication pattern](fig/haloexchange.png)
+![Depiction of halo exchange communication pattern](fig/haloexchange.png)
 
 In such a case each rank only needs a thin slice of data from its neighbouring rank and send the same slice from its own
 data to the neighbour.  The data received from neighbours forms a "halo" around the ranks own data.
 
-### Reduction
+## Reduction
 
 A reduction is an operation that reduces a large amount of data, a vector or a matrix, to a single number.
 
@@ -70,9 +62,8 @@ They then perform the steps of collecting data from some of the ranks and perfor
 all the data has been collected.  The most efficient implementation depends on several technical features of the system.
 Fortunately many common reductions are implemented in the MPI library and are often optimised for a specific system.
 
-### All-to-All
+## All-to-All
 
 In other cases, some information needs to be sent from every rank to every other rank in the system.  This is the most
 problematic scenario; the large amount of communication required reduces the potential gain from designing a parallel
 algorithm.  Nevertheless the performance gain may be worth the effort if it is necessary to solve the problem quickly.
-
