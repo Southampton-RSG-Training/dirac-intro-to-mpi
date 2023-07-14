@@ -14,6 +14,7 @@ int main(int argc, char **argv)
 
     int sum = 0;
     MPI_Status status;
+
     if (my_rank == 0) {
         for (int i = 1; i < num_ranks; ++i) {
             int recv_num = 0;

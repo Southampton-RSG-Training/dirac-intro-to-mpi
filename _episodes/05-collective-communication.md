@@ -230,6 +230,7 @@ if (my_rank == ROOT_RANK) {
 int num_per_rank = NUM_DATA_POINTS / num_ranks;
 int *scattered_data_for_rank = malloc(num_per_rank * sizeof(int));
 
+
 /* Using a single function call, the data has been split and communicated evenly between all ranks */
 MPI_Scatter(send_data, num_per_rank, MPI_INT, scattered_data_for_rank, num_per_rank, MPI_INT, ROOT_RANK, MPI_COMM_WORLD);
 ```
@@ -547,3 +548,4 @@ MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 > ](https://learn.microsoft.com/en-us/message-passing-interface/mpi-collective-functions).
 >
 {: .callout}
+
