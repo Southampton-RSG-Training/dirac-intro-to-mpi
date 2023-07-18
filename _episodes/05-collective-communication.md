@@ -54,7 +54,7 @@ would be to start the loop over ranks from 0, which would cause a deadlock!
 
 We don't need to write code like this (unless we want *complete* control over the data communication), because MPI has
 access to collective communication functions to abstract all of this code for us. The above code can be replaced by a
-single collective communiucation function. Collection operations are also implemented far more efficiently in the MPI
+single collective communication function. Collection operations are also implemented far more efficiently in the MPI
 library than we could ever write using point-to-point communications.
 
 There are several collective operations that are implemented in the MPI standard. The most commonly-used are:
