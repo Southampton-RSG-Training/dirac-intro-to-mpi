@@ -81,33 +81,29 @@ multiply_matrices(rank_matrix_a, matrix_b, rank_matrix_result);
 /* Use gather communication to get each rank's result for rank_matrix_a * matrix_b into receive
    buffer `matrix_result`. Our life is made easier since rank_matrix and matrix_result are flat (and contiguous)
    arrays, so we don't need to worry about memory layout*/
-MPI_Gather(rank_matrix_result, rows_per_rank * b_cols, MPI_DOUBLE, matrix_result, rows_per_ranks * b_cols,
+MPI_Gather(rank_matrix_result, rows_per_rank * num_cols_b, MPI_DOUBLE, matrix_result, rows_per_rank * num_cols_b,
            MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
 ```
 
 ## Reduction
 
-A reduction operation is one that *reduces* multiple amounts of data into a single value, such as during a summation or
-in finding the largest value in a collection of values. Similar to the gathering and scattering pattern, using reduction
-operations to communicate data between ranks has a wide range of applications.
+A reduction operation is one that *reduces* multiple pieces of data into a single value, such as by summing values
+or finding the largest value in a collection of values. The use case for reductions throughout scientific code is wide,
+which makes it a very common communication pattern. Since reductions are a collective operation, the communication
+overheads increases with the number of ranks. It is again, like with scattering and gathering, best to use the reduction
+functions within the MPI library, rather than implementing the pattern ourselves.
 
-The sum example above is a reduction.  Since data is needed from all ranks, this tends to be a time consuming operation,
-similar to a gather operation.  Usually each rank first performs the reduction locally, arriving at a single number.
-They then perform the steps of collecting data from some of the ranks and performing the reduction on that data, until
-all the data has been collected.  The most efficient implementation depends on several technical features of the system.
-Fortunately many common reductions are implemented in the MPI library and are often optimised for a specific system.
+![A depiction of a reduction operation](fig/reduction.png)
 
-TODO
+Given the fact that reductions fit in almost any algorithm or data access pattern, there are countless examples to show
+a reduction communication pattern. In the next code example, a Monte Carlo algorithm is implemented which estimates the
+value of $\pi$. To do that, a billion random points are generated and checked whether they fall within or outside of a
+circle. The ratio of points in and outside of the circle is propotional to the value of $\pi$.
 
-The following code example shows a Monte Carlo algorithm to estimate the value of $\pi$. Millions of random points are
-generated and checked to see if they are within or outside of a unit circle (a circle with a radius of 1). The ratio of
-points within the unit circle and the total number of points generated is proportional to $\pi$.
-
-Each iteration, or point, is independent of any other points or data in the algorithm. Therefore there needs to be no
-additional communication. To parallelise the task, each rank will compute the number of points which fall within the
-unit circle for a subset of the total number of points. The final ratio of points within the circle to the number of
-points in total is calculated by using a reduction to get the total sum of points within the unit circle, and comparing
-this to the total number of points generated across all ranks.
+Since each point generated and its position within the circle is completely independent to the other points, the
+communication pattern is simple (this is also an example of an embarrassingly parallel problem) as we only need one
+reduction. To parallelise the problem, each rank generates a sub-set of the total number of points and a reduction is
+done at the end, to calculate the total number of points within the circle from the entire sample.
 
 ```c
 /* 1 billion points is a lot, so we should parallelise this calculation */
@@ -129,7 +125,7 @@ for (int i = 0; i < points_per_rank; ++i) {
     double x = (double)rand() / RAND_MAX;
     double y = (double)rand() / RAND_MAX;
     if (x * x + y * y <= 1.0) {
-        rank_points_in_circle++;  /* It's in the circle, so increment */
+        rank_points_in_circle++;  /* It's in the circle, so increment the counter */
     }
 }
 
@@ -139,18 +135,45 @@ int total_points_in_circle;
 MPI_Reduce(&rank_points_in_circle, &total_points_in_circle, 1, MPI_INT, MPI_SUM, ROOT_RANK, MPI_COMM_WORLD);
 
 /* The estimate for π is proportional to the ratio of the points in the circle and the number of
-   point generated */
+   points generated */
 if (my_rank == ROOT_RANK) {
     double pi = 4.0 * total_points_in_circle / total_num_points;
     printf("Estimated value of π = %f\n", pi);
 }
 ```
 
+> ## More reduction examples
+>
+> Reduction operations are not only used in embarrassingly parallel Monte Carlo problems. Can you think of any other
+> examples, or algorithms, where you might use a reduction pattern?
+>
+> > ## Solution
+> >
+> > Here is a (non-exhaustive) list of examples where reduction operations are useful.
+> >
+> > 1. Finding the maximum/minimum or average temperature in a simulation grid: by conducting a reduction across all the
+> >    grid cells (which may have, for example, been scattered across ranks), you can easily find the maximum/minimum
+> >    temperature in the grid, or sum up the temperatures to calculate the average temperature.
+> > 2. Combining results into a global state: in some simulations, such as climate modelling, the simulation is split
+> >    into discrete time steps. At the end of each time step, a reduction can be used to update the global state or
+> >    combine together pieces of data (similar to a gather operation).
+> > 3. Large statistical models: in a large statistical model, the large amounts of data can be processed by splitting
+> >    it across ranks and calculating statistical values for the sub-set of data. The final values are then calculated
+> >    by using a reduction operation and re-normalizing the values appropriately.
+> > 4. Numerical integration: each rank will compute the area under the curve for its portion of the curve. The value of
+> >    the integral for the entire curve is then calculated using a reduction operation.
+> >
+> {: .solution}
+>
+{: .challenge}
+
 ## Domain decomposition and halo exchange
 
 The matrix example was already an example of domain decomposition, in 1 dimension.
 
 [`MPI_Dims_create()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Dims_create.3.php)
+
+[virtual topologies](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node187.htm#Node187)
 
 ```c
 /* We have to first calculate the size of each rectangular region. In this example, we have
@@ -181,27 +204,49 @@ A common feature of a domain decomposed algorithm is that communications are lim
 that work on a domain a short distance away.  For example, in a simulation of atomic crystals, updating a single atom
 usually requires information from a couple of its nearest neighbours.
 
-![Depiction of halo exchange communication pattern](fig/haloexchange.png)
-
 In such a case each rank only needs a thin slice of data from its neighbouring rank and send the same slice from its own
 data to the neighbour.  The data received from neighbours forms a "halo" around the ranks own data.
+
+![Depiction of halo exchange for 1D decomposition](fig/halo_example_1d.png)
 
 [`MPI_Sendrecv()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Sendrecv_replace.3.php)
 
 ```c
-const prev_rank = my_rank - 1 < 0 ? MPI_PROC_NULL : my_rank - 1;
-const next_rank = my_rank + 1 > num_ranks - 1 ? MPI_PROC_NULL : my_rank + 1;
+/* Function to convert row and col coordinates into an index for a 1d array */
+int index_into_2d(int row, int col, int num_cols) { return row * num_cols + col; }
 
-/* Top row to bottom row */
+/* MPI_Sendrecv is designed for "chain" communications, so we need to figure out the next
+   and previous rank. We use `MPI_PROC_NULL` (a special constant) to tell MPI that we don't
+   have a partner to communicate to/receive from */
+int prev_rank = my_rank - 1 < 0 ? MPI_PROC_NULL : my_rank - 1;
+int next_rank = my_rank + 1 > num_ranks - 1 ? MPI_PROC_NULL : my_rank + 1;
+
+/* Send the top row of the image to the bottom row of the previous rank */
 MPI_Sendrecv(&image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0,
-            &image[index_into_2d(num_rows - 1, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
-            MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+             &image[index_into_2d(num_rows - 1, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
+             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-/* Bottom row into top row */
+/* Send the bottom row into top row  of the next rank */
 MPI_Sendrecv(&image[index_into_2d(num_rows - 2, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
-            &image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD,
-            MPI_STATUS_IGNORE);
+             &image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
 ```
+
+> ## Halo exchange in two dimensions
+>
+> The previous code example shows one implementation of halo exchange in one dimension. Following from the code example
+> showing domain decomposition in two dimensions, write down the steps (or some pseudocode) on an implementation of halo
+> exchange in two dimensions.
+>
+> ![Depiction of halo exchange communication pattern](fig/haloexchange.png)
+>
+> > ## Solution
+> >
+> >
+> >
+> {: .solution}
+>
+{: .challenge}
 
 ## All-to-All
 
