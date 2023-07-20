@@ -166,7 +166,7 @@ Hello World!
 > termination.
 {: .callout}
 
-## Using MPI to Split Work Across Processes
+## Using MPI in a Program
 
 As we've just learned, running a program with `mpiexec` or `mpirun` results in the initiation of multiple instances, e.g. running our `hello_world` program across 4 processes:
 
@@ -194,9 +194,9 @@ Usually we will return the value of `MPI_Finalize` from the main function
 After MPI is initialized, you can find out the total number of ranks and the specific rank of the copy:
 
 ~~~
-int size, rank;
-int MPI_Comm_size(MPI_COMM_WORLD, &size);
-int MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+int num_ranks, my_rank;
+int MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+int MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 ~~~
 {: .language-c}
 
@@ -211,16 +211,16 @@ Here's a more complete example:
 #include <mpi.h>
 
 int main(int argc, char** argv) {
-    int size, rank;
+    int num_ranks, my_rank;
 
     // First call MPI_Init
     MPI_Init(&argc, &argv);
     
     // Get total number of ranks and my rank
-    MPI_Comm_size(MPI_COMM_WORLD, &size);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
-    printf("My rank number is %d out of %d\n", rank, size);
+    printf("My rank number is %d out of %d\n", my_rank, num_ranks);
 
     // Call finalize at the end
     return MPI_Finalize();
@@ -257,6 +257,93 @@ int main(int argc, char** argv) {
 > {: .solution}
 {: .challenge}
 
+## Using MPI to Split Work Across Processes
+
+We've seen how to use MPI within a program to determine the total number of ranks, as well as our own ranks. But how
+should we approach using MPI to split up some work between ranks so the work can be done in parallel? Let's consider
+one simple way of doing this.
+
+Let's assume we wish to count the number of prime numbers between 1 and 100,000, and wished to split this workload
+evenly between the number of CPUs we have available. We already know the number of total ranks `num_ranks`, our own
+rank `my_rank`, and the total workload (i.e. 100,000 iterations), and using the information we can split the workload
+evenly across our ranks. Therefore, given 4 CPUs, for each rank the work would be divided into 25,000 iterations per
+CPU, as:
+
+~~~
+Rank 1: 1 - 25,000
+Rank 2: 25,001 - 50,000
+Rank 3: 50,001 - 75,000
+Rank 4: 75,001 - 100,000
+~~~
+{: .output}
+
+We can work out the iterations to undertake for a given rank number, by working out:
+- Work out the number of iterations per rank by dividing the total number of iterations we want to calculate by `num_ranks`
+- Determine the start of the work iterations for this rank by multiplying our rank number by the iterations per rank
+- Determine the end of the work iterations for this rank by working out the hypothetical start of the next rank and deducting 1
+
+We could write this in C as:
+
+~~~
+// calculate how many iterations each rank will deal with
+int iterations_per_rank = NUM_ITERATIONS / num_ranks;
+int rank_start = my_rank * iterations_per_rank;
+int rank_end = ((my_rank + 1) * iterations_per_rank) - 1;
+~~~
+{: .language-c}
+
+We also need to cater for the case where work may not be distributed evenly across ranks, where the total work isn't
+directly divisible by the number of CPUs. In which case, we adjust the last rank's end of iterations to be the total
+number of iterations. This ensures the entire desired workload is calculated:
+
+~~~
+// catch cases where the work can't be split evenly
+if (rank_end > NUM_ITERATIONS || (my_rank == (num_ranks-1) && rank_end < NUM_ITERATIONS))
+    rank_end = NUM_ITERATIONS;
+~~~
+{: .language-c}
+
+Now we have this information, within a single rank we can perform the calculation for counting primes between our assigned
+subset of the problem, and output the result, e.g.:
+
+~~~
+// each rank is dealing with a subset of the problem between rank_start and rank_end
+int prime_count = 0;
+for (int n = rank_start; n <= rank_end; ++n) {
+    bool is_prime = true;
+
+    // 0 and 1 are not prime numbers
+    if (n == 0 || n == 1)
+        is_prime = false;
+
+    // if we can only divide n by i, then n is not prime
+    for (int i = 2; i <= n / 2; ++i) {
+        if (n % i == 0) {
+            is_prime = false;
+            break;
+        }
+    }
+
+    if (is_prime)
+        prime_count++;
+}
+printf("Rank %d - primes between %d-%d is: %d\n", my_rank, rank_start, rank_end, prime_count);
+~~~
+{: .language-c}
+
+To try this out, copy the full [example code](code/examples/02-count_primes.c), compile and then run it:
+
+~~~
+mpicc -o count_primes count_primes.c
+mpiexec -n 2 count_primes
+~~~
+{: .language-bash}
+
+Of course, this solution only goes so far. We can add the resulting counts from each rank together to get our final
+number of primes between 0 and 100,000, but what would be useful would be to have our code somehow retrieve the results
+from each rank and add them together, and output that overall result. More generally, ranks may need results from other
+ranks to complete their own computations. For this we would need ways for ranks to communicate - the primary benefit of
+MPI - which we'll look at in subsequent episodes.
 
 > ## What About Python?
 >
@@ -268,27 +355,49 @@ can perform MPI calls after ``from mpi4py import MPI``.
 
 ## Submitting our Program to a Batch Scheduler
 
-In practice, such parallel codes may well be executed on a local machine, particularly during development. However,
+In practice, such parallel codes may well be executed on a local machine particularly during development. However,
 much greater computational power is often desired to reduce runtimes to tractable levels, by running such codes on
 HPC infrastructures such as DiRAC. These infrastructures make use of batch schedulers, such as Slurm, to manage access 
 to distributed computational resources. So give our simple hello world example, how would we run this on an HPC batch
 scheduler such as Slurm?
 
-Let’s create a slurm submission script called **`hello-world-job.sh`**. Open an editor (e.g. Nano) and type (or copy/paste) the following contents:
-```
+Let’s create a slurm submission script called `count_primes.sh`. Open an editor (e.g. Nano) and type
+(or copy/paste) the following contents:
+
+~~~
 ##!/usr/bin/env bash
-SBATCH --account=yourProjectCode
+#SBATCH --account=yourProjectCode
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --time=00:01:00
-#SBATCH --job-name=hello-world
+#SBATCH --job-name=count-primes
 
-mpirun -n 4 ./hello_world
-```
+module load gnu_comp/13.1.0
+module load openmpi/4.1.4
+
+mpiexec -n 4 ./count_primes
+~~~
+{: .language-bash}
+
 We can now submit the job using the `sbatch` command and monitor its status with `squeue`:
 
-```
-sbatch hello_world-job.sh
+~~~
+sbatch count-primes.sh
 squeue -u yourUsername
-```
-Note the job id and check your job in the queue. Take a look at the output file when the job completes.
+~~~
+{: .language-bash}
+
+Note the job id and check your job in the queue. Take a look at the output file when the job completes. You should see
+something like:
+
+~~~
+====
+Starting job 6378814 at Mon 17 Jul 11:05:12 BST 2023 for user yourUsername.
+Running on nodes: m7013
+====
+Rank 0 - count of primes between 1-25000: 2762
+Rank 1 - count of primes between 25001-50000: 2371
+Rank 2 - count of primes between 50001-75000: 2260
+Rank 3 - count of primes between 75001-100000: 2199
+~~~
+{: .output}
