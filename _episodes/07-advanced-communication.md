@@ -16,11 +16,11 @@ keypoints:
 - The functions `MPI_Pack` and `MPI_Unpack` can be used to manually create a contiguous memory block of data
 ---
 
-We've so far seen the basic building blocks for splitting work and communicating data between ranks, meaning we're now
-dangerous enough to write a simple and successful MPI application. We've worked, so far, with simple data structures,
-such as single variables or small 1D arrays. In reality, any useful software we write will use more complex data
-structures, such as structures, n-dimensional arrays and other complex types. Working with these in MPI require a bit
-more work to communicate them correctly and efficiently.
+In the previous episodes, we've seen the basic building blocks for splitting work and communicating data between ranks,
+meaning we're now dangerous enough to write a simple and successful MPI application. We've worked, so far, with simple
+data structures, such as single variables or small 1D arrays. In reality, any useful software we write will use more
+complex data structures, such as structures, n-dimensional arrays and other complex types. Working with these in MPI
+require a bit more work to communicate them correctly and efficiently.
 
 To help with this, MPI provides an interface to create new types known as *derived datatypes*. A derived type acts as a
 way to enable the translation of complex data structures into instructions which MPI uses for efficient data access

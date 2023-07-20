@@ -164,28 +164,6 @@ If you use non-blocking functions, call wait immediately.
 The point is to write a simple code that works correctly.
 You can optimise later.
 
-> ## Selecting Communication Patterns for our Parallel Code
->
-> Which communication pattern(s) should you choose for our parallel code, taking in account:
->
-> - How would you divide the data between the ranks?
-> - When does each rank need data from other ranks?
-> - Which ranks need data from which other ranks?
->
->> ## Solution
->>
->> Only one of the loops requires data from the other ranks, and these are only nearest neighbours.
->>
->> Parallelising the loops would actually be the same thing as splitting the physical volume. Each iteration of the loop
->> accesses one element in the `rho` and `unew` fields and four elements in the `u` field. The `u` field needs to be
->> communicated if the value is stored on a different rank.
->>
->> There is also a global reduction pattern needed for calculating `unorm`. Every node needs to know the result.
->>
->{: .solution}
->
-{: .challenge}
-
 > ## Parallel Execution
 >
 > First, just implement a single step.
