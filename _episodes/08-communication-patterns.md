@@ -3,125 +3,354 @@ title: Communication Patterns
 slug: "dirac-intro-to-mpi-communication-patterns"
 teaching: 0
 exercises: 0
+math: true
 questions:
--
+- What are some common data communication patterns in MPI?
 objectives:
--
--
+- Learn and understand common communication patterns
+- Be able to determine what communication pattern you should use for your own MPI applications
 keypoints:
--
+- There are many ways to communicate data, which we need to think about carefully
+- It's better to use collective operations, rather than implementing similar behaviour yourself
 ---
 
+We have now come across the basic building blocks we need to create an MPI application. The previous episodes have
+covered how to split tasks between ranks to parallelise the workload, and how to communicate data between ranks; either
+between two ranks (point-to-point) or multiple at once (collective). The next step is to build upon these basic blocks,
+and to think about how we should structure our communication. The parallelisation and communication strategy we choose
+will depend on the underlying problem and algorithm. For example, a grid based simulation (such as in computational
+fluid dynamics) will need to structure its communication differently to a simulation which does not discretise
+calculations onto a grid of points. In this episode, we will look at some of the most common communication patterns.
 
-## Communication Patterns in MPI
+## Scatter and gather
 
-In MPI parallelization we can make use of several different patterns of communication between ranks.
-If you decide it's worth your time to try to parallelise the problem,
-the next step is to decide how the ranks will share the tasks or the data.
-This should be done for each region separately, but taking into account the time it would take to reorganise the data if you decide to change the pattern between regions.
+Using the scatter and gather collective communication functions, to distribute work and bring the results back together,
+is a common pattern and finds a wide range of applications. To recap: in **scatter communication**, the root rank
+splits a piece of data into equal chunks and sends a chunk to each of the other ranks, as shown in the diagram below.
 
-The parallelisation strategy is often based on the
-underlying problem the algorithm is dealing with.
-For example, in materials science it makes sense
-to decompose the data into domains by splitting the
-physical volume of the material.
+![Depiction of scatter communication pattern](fig/scatter.png)
 
-Most programs will use the same pattern in every region.
-There is a cost to reorganising data, mostly having to do with communicating large blocks between ranks.
-This is really only a problem if done in a tight loop, many times per second.
+In **gather communication** all ranks send data to the root rank which combines them into a single buffer.
 
-Let's take a look at these, and then decide which pattern (or patterns) will best suit the paralellisable
-regions of our code.
+![Depiction of gather communication pattern, with each rank sending their data to a root rank](fig/gather.png)
 
-### Gather / Scatter
+Scatter communication is useful for most algorithms and data access patterns, as is gather communication. At least for
+scattering, this communication pattern is generally easy to implement especially for embarrassingly parallel problems
+where the data sent to each rank is independent. Gathering data is useful for bringing results to a root rank to process
+further or to write to disk, and is also helpful for bring data together to generate diagnostic output.
 
-In **gather communication**, all ranks send a piece of information to
-one rank.  Gathers are typically used when printing out information or
-writing to disk.  For example, each could send the result of a
-measurement to rank 0 and rank 0 could print all of them. This is
-necessary if only one rank has access to the screen.  It also ensures
-that the information is printed in order.
+Since scatter and gather communications are collective, the communication time required for this pattern increases as
+the number of ranks increases. The amount of messages that needs to be sent increases logarithmically with the number of
+ranks. The most efficient implementation of scatter and gather communication are to use the collective functions
+(`MPI_Scatter()` and `MPI_Gather()`) in the MPI library.
 
-<img src="fig/gather.png" alt="Depiction of gather communication pattern, with each rank sending their data to a root rank"/>
+One method for parallelising matrix multiplication is with a scatter and gather communication. To multiply two matrices,
+we follow the following equation,
 
-Similarly, in a **scatter communication**, one rank sends a piece of data
-to all the other ranks.  Scatters are useful for communicating
-parameters to all the ranks doing the computation.  The parameter
-could be read from disk but it could also be produced by a previous
-computation.
+$$ \left[ \begin{array}{cc} A_{11} & A_{12} \\ A_{21} & A_{22}\end{array} \right] \cdot \left[ \begin{array}{cc}B_{11} &
+B_{12} \\ B_{21} & B_{22}\end{array} \right]   = \left[ \begin{array}{cc}A_{11} \cdot B_{11} + A_{12} \cdot B_{21} &
+A_{11} \cdot
+B_{12} + A_{12} \cdot B_{22} \\ A_{21} \cdot B_{11} + A_{22} \cdot B_{21} & A_{21} \cdot B_{12}
++ A_{22} \cdot B_{22}\end{array} \right]$$
 
-<img src="fig/scatter.png" alt="Depiction of scatter communication pattern, with each rank sending a piece of data to root rank"/>
+Each element of the resulting matrix is a dot product between a row in the first matrix (matrix A) and a column in
+the second matrix (matrix B). Each row in the resulting matrix depends on a single row in matrix A, and each column in
+matrix B. To split the calculation across ranks, one approach would be to *scatter* rows from matrix A and calculate the
+result for that scattered data and to combine the results from each rank to get the full result.
 
-Gather and scatter operations require more communication as the number
-of ranks increases.  The amount of messages sent usually increases
-logarithmically with the number of ranks.  They have efficient
-implementations in the MPI libraries.
+```c
+/* Determine how many rows each matrix will compute and allocate space for a receive buffer
+   receive scattered subsets from root rank. We'll use 1D arrays to store the matrices, as it
+   makes life easier when using scatter and gather */
+int rows_per_rank = num_rows_a / num_ranks;
+double *rank_matrix_a = malloc(rows_per_rank * num_rows_a * sizeof(double));
+double *rank_matrix_result = malloc(rows_per_rank * num_cols_b * sizeof(double));
 
-### Halo Exchange
+/* Scatter matrix_a across ranks into rank_matrix_a. Each rank will compute a subset of
+   the result for the rows in rank_matrix_a */
+MPI_Scatter(matrix_a, rows_per_ranks * num_cols_a, MPI_DOUBLE, rank_matrix_a, rows_per_ranks * num_cols_a,
+            MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
 
-A common feature of a domain decomposed algorithm is that
-communications are limited to a small number of other ranks that work
-on a domain a short distance away.  For example, in a simulation of
-atomic crystals, updating a single atom usually requires information
-from a couple of its nearest neighbours.
+/* Broadcast matrix_b to all ranks, because matrix_b was only created on the root rank
+   and each sub-calculation needs to know all elements in matrix_b */
+MPI_Bcast(matrix_b, num_rows_b * num_cols_b, MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
 
-<img src="fig/haloexchange.png" alt="Depiction of halo exchange communication pattern"/>
+/* Function to compute result for the subset of rows of matrix_a */
+multiply_matrices(rank_matrix_a, matrix_b, rank_matrix_result);
 
-In such a case each rank only needs a thin slice of data from its
-neighbouring rank and send the same slice from its own data to the
-neighbour.  The data received from neighbours forms a "halo" around
-the ranks own data.
+/* Use gather communication to get each rank's result for rank_matrix_a * matrix_b into receive
+   buffer `matrix_result`. Our life is made easier since rank_matrix and matrix_result are flat (and contiguous)
+   arrays, so we don't need to worry about memory layout*/
+MPI_Gather(rank_matrix_result, rows_per_rank * num_cols_b, MPI_DOUBLE, matrix_result, rows_per_rank * num_cols_b,
+           MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
+```
 
-### Reduction
+## Reduction
 
-A reduction is an operation that reduces a large amount of data, a
-vector or a matrix, to a single number.
+A reduction operation is one that *reduces* multiple pieces of data into a single value, such as by summing values
+or finding the largest value in a collection of values. The use case for reductions throughout scientific code is wide,
+which makes it a very common communication pattern. Since reductions are a collective operation, the communication
+overheads increases with the number of ranks. It is again, like with scattering and gathering, best to use the reduction
+functions within the MPI library, rather than implementing the pattern ourselves.
 
-<img src="fig/reduction.png" alt="Depiction of reduction communication pattern, adding a series of data from each rank together"/>
+![A depiction of a reduction operation](fig/reduction.png)
 
-The sum example above is a
-reduction.  Since data is needed from all ranks, this tends to be a
-time consuming operation, similar to a gather operation.  Usually each
-rank first performs the reduction locally, arriving at a single
-number.  They then perform the steps of collecting data from some of
-the ranks and performing the reduction on that data, until all the
-data has been collected.  The most efficient implementation depends on
-several technical features of the system.  Fortunately many common
-reductions are implemented in the MPI library and are often optimised
-for a specific system.
+Given the fact that reductions fit in almost any algorithm or data access pattern, there are countless examples to show
+a reduction communication pattern. In the next code example, a Monte Carlo algorithm is implemented which estimates the
+value of $\pi$. To do that, a billion random points are generated and checked whether they fall within or outside of a
+circle. The ratio of points in and outside of the circle is propotional to the value of $\pi$.
 
-### All-to-All
+Since each point generated and its position within the circle is completely independent to the other points, the
+communication pattern is simple (this is also an example of an embarrassingly parallel problem) as we only need one
+reduction. To parallelise the problem, each rank generates a sub-set of the total number of points and a reduction is
+done at the end, to calculate the total number of points within the circle from the entire sample.
 
-In other cases, some information needs to be sent from every rank to
-every other rank in the system.  This is the most problematic
-scenario; the large amount of communication required reduces the
-potential gain from designing a parallel algorithm.  Nevertheless the
-performance gain may be worth the effort if it is necessary to solve
-the problem quickly.
+```c
+/* 1 billion points is a lot, so we should parallelise this calculation */
+int total_num_points = (int)1e9;
 
-> ## Selecting Communication Patterns for our Parallel Code
+/* Each rank will check an equal number of points, with their own
+   counter to track the number of points falling within the circle */
+int points_per_rank = total_num_points / num_ranks;
+int rank_points_in_circle = 0;
+
+/* Seed each rank's RNG with a unique seed, otherwise each rank will have an
+   identical result and it would be the same as using `points_per_rank` in total
+   rather than `total_num_points` */
+srand(time(NULL) + my_rank);
+
+/* Generate a random x and y coordinate (between 0 - 1) and check to see if that
+   point lies within the unit circle */
+for (int i = 0; i < points_per_rank; ++i) {
+    double x = (double)rand() / RAND_MAX;
+    double y = (double)rand() / RAND_MAX;
+    if (x * x + y * y <= 1.0) {
+        rank_points_in_circle++;  /* It's in the circle, so increment the counter */
+    }
+}
+
+/* Perform a reduction to sum up `rank_points_in_circle` across all ranks, this
+   will be the total number of points in a circle for `total_num_point` iterations */
+int total_points_in_circle;
+MPI_Reduce(&rank_points_in_circle, &total_points_in_circle, 1, MPI_INT, MPI_SUM, ROOT_RANK, MPI_COMM_WORLD);
+
+/* The estimate for π is proportional to the ratio of the points in the circle and the number of
+   points generated */
+if (my_rank == ROOT_RANK) {
+    double pi = 4.0 * total_points_in_circle / total_num_points;
+    printf("Estimated value of π = %f\n", pi);
+}
+```
+
+> ## More reduction examples
 >
-> Which communication pattern(s) should you choose for our parallel code, taking in account:
+> Reduction operations are not only used in embarrassingly parallel Monte Carlo problems. Can you think of any other
+> examples, or algorithms, where you might use a reduction pattern?
 >
-> - How would you divide the data between the ranks?
-> - When does each rank need data from other ranks?
-> - Which ranks need data from which other ranks?
+> > ## Solution
+> >
+> > Here is a (non-exhaustive) list of examples where reduction operations are useful.
+> >
+> > 1. Finding the maximum/minimum or average temperature in a simulation grid: by conducting a reduction across all the
+> >    grid cells (which may have, for example, been scattered across ranks), you can easily find the maximum/minimum
+> >    temperature in the grid, or sum up the temperatures to calculate the average temperature.
+> > 2. Combining results into a global state: in some simulations, such as climate modelling, the simulation is split
+> >    into discrete time steps. At the end of each time step, a reduction can be used to update the global state or
+> >    combine together pieces of data (similar to a gather operation).
+> > 3. Large statistical models: in a large statistical model, the large amounts of data can be processed by splitting
+> >    it across ranks and calculating statistical values for the sub-set of data. The final values are then calculated
+> >    by using a reduction operation and re-normalizing the values appropriately.
+> > 4. Numerical integration: each rank will compute the area under the curve for its portion of the curve. The value of
+> >    the integral for the entire curve is then calculated using a reduction operation.
+> >
+> {: .solution}
 >
->> ## Solution
->>
->> Only one of the loops requires data from the other ranks,
->> and these are only nearest neighbours.
->>
->> Parallelising the loops would actually be the same thing as splitting the physical volume.
->> Each iteration of the loop accesses one element
->> in the `rho` and `unew` fields and four elements in
->> the `u` field.
->> The `u` field needs to be communicated if the value
->> is stored on a different rank.
->>
->> There is also a global reduction pattern needed for calculating `unorm`.
->> Every node needs to know the result.
->>
->{: .solution}
+{: .challenge}
+
+## Domain decomposition and halo exchange
+
+If a problem depends on a (usually spatially) discretised grid, array of values or grid structure, such as in, for
+example, image processing, computational fluid dynamics, molecular dynamics or finite element analysis, then we can
+parallelise the tasks by splitting the problem into smaller *domains* for each rank to work with. This is shown in the
+diagram below, where an image has been split into four smaller images which will be sent to a rank.
+
+![Domain decomposition for a 2D image](fig/domain_decomp_2.png)
+
+In most cases, these problems are usually not embarrassingly parallel, since additional communication is often required
+as the work is not independent and depends on data in other ranks, such as the value of neighbouring grid points or
+results from a previous iteration. As an example, in a molecular dynamics simulation, updating the state of a molecule
+depends on the state and interactions between other molecules which may be in another domain in a different rank.
+
+A common feature of a domain decomposed algorithm is that communications are limited to a small number of other ranks
+that work on a domain a short distance away. In such a case, each rank only needs a thin slice of data from its
+neighbouring rank(s) and send the same slice of its own data to the neighbour(s). The data received from neighbours
+forms a "halo" around the ranks own data, and shown in the next diagram, and is known as *halo exchange*.
+
+![Depiction of halo exchange communication pattern](fig/haloexchange.png)
+
+The matrix example from earlier is actually an example of domain decomposition, albeit a simple case, as the rows of the
+matrix were split across ranks. It's a simple example, as additional data didn't need to be communicated between ranks
+to solve the problem. There is, unfortunately, no best way or "one size fits all" type of domain decomposition, as it
+depends on the algorithm and data access required.
+
+### Domain decomposition
+
+If we take image processing as an example, we can split the image like in the matrix example, where each rank gets some
+number of rows of the image to process. In this case, the code to scatter the *rows* of image is more or less identical
+to the matrix case from earlier. Another approach would be to decompose the image into smaller rectangles like in the
+image above. This is sometimes a better approach, as it allows for more efficient and balanced resource allocation and
+halo communication, but this is usually as the expense of increased memory usage and code complexity.
+
+An example of 2D domain decomposition is shown in the next example, which uses a derived type (from the previous
+episode) to discretise the image into smaller rectangles and to scatter the smaller domains to the other ranks.
+
+```c
+/* We have to first calculate the size of each rectangular region. In this example, we have
+   assumed that the dimensions are perfectly divisible. We can determine the dimensions for the
+   decomposition by using MPI_Dims_create() */
+int rank_dims[2] = { 0, 0 };
+MPI_Dims_create(num_ranks, 2, rank_dims);
+int num_rows_per_rank = num_rows / rank_dims[0];
+int num_cols_per_rank = num_cols / rank_dims[1];
+int num_elements_per_rank = num_rows_per_rank * num_cols_per_rank;
+
+/* The rectangular blocks we create are not contiguous in memory, so we have to use a
+   derived data type for communication */
+MPI_Datatype sub_array_t;
+int count = num_rows_per_rank;
+int blocklength = num_cols_per_rank;
+int stride = num_cols;
+MPI_Type_vector(count, blocklength, stride, MPI_DOUBLE, &sub_array_t);
+MPI_Type_commit(&sub_array_t);
+
+/* MPI_Scatter (and similar collective functions) do not work with this sort of Cartesian
+   topology, so we unfortunately have to scatter the array manually */
+double *rank_image = malloc(num_elements_per_rank * sizeof(double));
+scatter_sub_arrays_to_other_ranks(image, rank_image, sub_array_t, rank_dims, my_rank, num_rows_per_rank,
+                                  num_cols_per_rank, num_elements_per_rank, num_cols);
+```
+
+> ## `scatter_sub_arrays_to_other_ranks()`
+>
+> ```c
+> /* Function to convert row and col coordinates into an index for a 1d array */
+> int index_into_2d(int row, int col, int num_cols) { return row * num_cols + col; }
+>
+> /* Fairly complex, and inefficient, function to send sub-arrays of `image` to the other ranks */
+> void scatter_sub_arrays_to_other_ranks(double *image, double *rank_image, MPI_Datatype sub_array_t, int rank_dims[2],
+>                                        int my_rank, int num_cols_per_rank, int num_rows_per_rank,
+>                                        int num_elements_per_rank, int num_cols)
+> {
+>    if (my_rank == ROOT_RANK) {
+>       int dest_rank = 0;
+>       for (int i = 0; i < rank_dims[0]) {
+>          for (int j = 0; j < rank_dims[1]) {
+>             if(dest_rank != ROOT_RANK) { /* Send sub array to a non-root rank */
+>                MPI_Send(&image[index_into_2d(num_rows_per_rank * i, num_cols_per_rank * j, num_cols)], 1, sub_array_t,
+>                         dest_rank, 0, MPI_COMM_WORLD);
+>             } else { /* Copy into root rank's rank image buffer */
+>               for (int ii = 0; ii < num_rows_per_rank; ++ii) {
+>                   for (int jj = 0; jj < num_cols_per_rank; ++jj) {
+>                      rank_image[index_into_2d(ii, jj, num_cols_per_rank)] = image[index_into_2d(ii, jj, num_cols)];
+>                   }
+>                }
+>             }
+>             dest_rank += 1;
+>          }
+>       }
+>    } else {
+>       MPI_Recv(rank_image, num_elements_per_rank, MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+>    }
+> }
+> ```
+>
+{: .solution}
+
+The function [`MPI_Dims_create()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Dims_create.3.php) is a useful utility
+function in MPI which is used to determine the dimensions of a Cartesian grid of ranks. In the above example, it's
+used to determine the number of rows and columns in each sub-array, given the number of ranks in the row and column
+directions of the grid of ranks from `MPI_Dims_create()`. In addition to the code above, you may also want to create a
+[*virtual Cartesian communicator topology*](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node187.htm#Node187) to
+reflect the decomposed geometry in the communicator as well, as this give access to a number of other utility functions
+which makes communicating data easier.
+
+### Halo exchange
+
+In domain decomposition methods, a "halo" refers to a region around the boundary of a sub-domain which contains a copy
+of the data from neighbouring sub-domains needed to perform computations that involve data from adjacent domains.
+The halo region allows neighboring sub-domains to share the required data efficiently, without the need for extensive
+communication.
+
+In a grid-based domain decomposition, as in the image processing example, a halo is often one or more rows of pixels (or
+elements) that surround a sub-domain's internal cells. Similarly, in other data structures like graphs or unstructured
+grids, the halo will be an extension of elements or nodes surrounding the sub-domain.
+
+![Depiction of halo exchange for 1D decomposition](fig/halo_example_1d.png)
+
+Example below is exchanging a halo in 1D, if image is split into strips instead of rectangles (shown in the diagram
+above).
+
+Use [`MPI_Sendrecv()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Sendrecv_replace.3.php) for chain communication
+
+![Depiction of chain communication](fig/rank_chain.png)
+
+```c
+/* Function to convert row and col coordinates into an index for a 1d array */
+int index_into_2d(int row, int col, int num_cols) { return row * num_cols + col; }
+
+/* `rank_image` is actually a little bigger, as we need two extra rows for a halo region for the top
+    and bottom of the row sub-domain */
+double *rank_image = malloc((num_rows + 2) * num_cols * sizeof(double));
+
+/* MPI_Sendrecv is designed for "chain" communications, so we need to figure out the next
+   and previous rank. We use `MPI_PROC_NULL` (a special constant) to tell MPI that we don't
+   have a partner to communicate to/receive from */
+int prev_rank = my_rank - 1 < 0 ? MPI_PROC_NULL : my_rank - 1;
+int next_rank = my_rank + 1 > num_ranks - 1 ? MPI_PROC_NULL : my_rank + 1;
+
+/* Send the top row of the image to the bottom row of the previous rank */
+MPI_Sendrecv(&rank_image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0,
+             &rank_image[index_into_2d(num_rows - 1, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
+             MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+/* Send the bottom row into top row  of the next rank */
+MPI_Sendrecv(&rank_image[index_into_2d(num_rows - 2, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
+             &rank_image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+```
+
+> ## Halo exchange in two dimensions
+>
+> The previous code example shows one implementation of halo exchange in one dimension. Following from the code example
+> showing domain decomposition in two dimensions, write down the steps (or some pseudocode) for the implementation of
+> domain decomposition and halo exchange in two dimensions.
+>
+>
+> > ## Solution
+> >
+> > TODO:
+> > The important thing to mention is the bookkeeping required for a 2D topology, such as the neighbouring ranks for
+> > halo exchange, the order of ranks and what rectangle of the image has gone to which rank. The last is required so we
+> > can gather the sub-images back together and put them together to re-construct the final image in the correct order.
+> >
+> {: .solution}
+>
+{: .challenge}
+
+## All-to-All
+
+In other cases, some information needs to be sent from every rank to every other rank in the system.  This is the most
+problematic scenario; the large amount of communication required reduces the potential gain from designing a parallel
+algorithm.  Nevertheless the performance gain may be worth the effort if it is necessary to solve the problem quickly.
+
+> ## Exercise: what pattern to use
+>
+> This exercise should show some example code, and get the students thinking about how they might communicate data
+>
+> > ## Solution
+> >
+> > Here is the solution
+> >
+> {: .solution}
 >
 {: .challenge}
