@@ -169,11 +169,40 @@ if (my_rank == ROOT_RANK) {
 
 ## Domain decomposition and halo exchange
 
-The matrix example was already an example of domain decomposition, in 1 dimension.
+If a problem depends on a (usually spatially) discretised grid, array of values or grid structure, such as in, for
+example, image processing, computational fluid dynamics, molecular dynamics or finite element analysis, then we can
+parallelise the tasks by splitting the problem into smaller *domains* for each rank to work with. This is shown in the
+diagram below, where an image has been split into four smaller images which will be sent to a rank.
 
-[`MPI_Dims_create()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Dims_create.3.php)
+![Domain decomposition for a 2D image](fig/domain_decomp_2.png)
 
-[virtual topologies](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node187.htm#Node187)
+In most cases, these problems are usually not embarrassingly parallel, since additional communication is often required
+as the work is not independent and depends on data in other ranks, such as the value of neighbouring grid points or
+results from a previous iteration. As an example, in a molecular dynamics simulation, updating the state of a molecule
+depends on the state and interactions between other molecules which may be in another domain in a different rank.
+
+A common feature of a domain decomposed algorithm is that communications are limited to a small number of other ranks
+that work on a domain a short distance away. In such a case, each rank only needs a thin slice of data from its
+neighbouring rank(s) and send the same slice of its own data to the neighbour(s). The data received from neighbours
+forms a "halo" around the ranks own data, and shown in the next diagram, and is known as *halo exchange*.
+
+![Depiction of halo exchange communication pattern](fig/haloexchange.png)
+
+The matrix example from earlier is actually an example of domain decomposition, albeit a simple case, as the rows of the
+matrix were split across ranks. It's a simple example, as additional data didn't need to be communicated between ranks
+to solve the problem. There is, unfortunately, no best way or "one size fits all" type of domain decomposition, as it
+depends on the algorithm and data access required.
+
+### Domain decomposition
+
+If we take image processing as an example, we can split the image like in the matrix example, where each rank gets some
+number of rows of the image to process. In this case, the code to scatter the *rows* of image is more or less identical
+to the matrix case from earlier. Another approach would be to decompose the image into smaller rectangles like in the
+image above. This is sometimes a better approach, as it allows for more efficient and balanced resource allocation and
+halo communication, but this is usually as the expense of increased memory usage and code complexity.
+
+An example of 2D domain decomposition is shown in the next example, which uses a derived type (from the previous
+episode) to discretise the image into smaller rectangles and to scatter the smaller domains to the other ranks.
 
 ```c
 /* We have to first calculate the size of each rectangular region. In this example, we have
@@ -187,33 +216,91 @@ int num_elements_per_rank = num_rows_per_rank * num_cols_per_rank;
 
 /* The rectangular blocks we create are not contiguous in memory, so we have to use a
    derived data type for communication */
+MPI_Datatype sub_array_t;
 int count = num_rows_per_rank;
 int blocklength = num_cols_per_rank;
 int stride = num_cols;
-MPI_Datatype subarray_t;
-MPI_Type_vector(count, blocklength, stride, MPI_DOUBLE, &subarray_t);
-MPI_Type_commit(&subarray_t);
+MPI_Type_vector(count, blocklength, stride, MPI_DOUBLE, &sub_array_t);
+MPI_Type_commit(&sub_array_t);
 
 /* MPI_Scatter (and similar collective functions) do not work with this sort of Cartesian
    topology, so we unfortunately have to scatter the array manually */
-double *rank_array = malloc(num_elements_per_rank * sizeof(double));
-scatter_subarrays_to_other_ranks(array, rank_array, num_rows_per_rank, num_cols_per_rank, subarray_t);
+double *rank_image = malloc(num_elements_per_rank * sizeof(double));
+scatter_sub_arrays_to_other_ranks(image, rank_image, sub_array_t, rank_dims, my_rank, num_rows_per_rank,
+                                  num_cols_per_rank, num_elements_per_rank, num_cols);
 ```
 
-A common feature of a domain decomposed algorithm is that communications are limited to a small number of other ranks
-that work on a domain a short distance away.  For example, in a simulation of atomic crystals, updating a single atom
-usually requires information from a couple of its nearest neighbours.
+> ## `scatter_sub_arrays_to_other_ranks()`
+>
+> ```c
+> /* Function to convert row and col coordinates into an index for a 1d array */
+> int index_into_2d(int row, int col, int num_cols) { return row * num_cols + col; }
+>
+> /* Fairly complex, and inefficient, function to send sub-arrays of `image` to the other ranks */
+> void scatter_sub_arrays_to_other_ranks(double *image, double *rank_image, MPI_Datatype sub_array_t, int rank_dims[2],
+>                                        int my_rank, int num_cols_per_rank, int num_rows_per_rank,
+>                                        int num_elements_per_rank, int num_cols)
+> {
+>    if (my_rank == ROOT_RANK) {
+>       int dest_rank = 0;
+>       for (int i = 0; i < rank_dims[0]) {
+>          for (int j = 0; j < rank_dims[1]) {
+>             if(dest_rank != ROOT_RANK) { /* Send sub array to a non-root rank */
+>                MPI_Send(&image[index_into_2d(num_rows_per_rank * i, num_cols_per_rank * j, num_cols)], 1, sub_array_t,
+>                         dest_rank, 0, MPI_COMM_WORLD);
+>             } else { /* Copy into root rank's rank image buffer */
+>               for (int ii = 0; ii < num_rows_per_rank; ++ii) {
+>                   for (int jj = 0; jj < num_cols_per_rank; ++jj) {
+>                      rank_image[index_into_2d(ii, jj, num_cols_per_rank)] = image[index_into_2d(ii, jj, num_cols)];
+>                   }
+>                }
+>             }
+>             dest_rank += 1;
+>          }
+>       }
+>    } else {
+>       MPI_Recv(rank_image, num_elements_per_rank, MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+>    }
+> }
+> ```
+>
+{: .solution}
 
-In such a case each rank only needs a thin slice of data from its neighbouring rank and send the same slice from its own
-data to the neighbour.  The data received from neighbours forms a "halo" around the ranks own data.
+The function [`MPI_Dims_create()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Dims_create.3.php) is a useful utility
+function in MPI which is used to determine the dimensions of a Cartesian grid of ranks. In the above example, it's
+used to determine the number of rows and columns in each sub-array, given the number of ranks in the row and column
+directions of the grid of ranks from `MPI_Dims_create()`. In addition to the code above, you may also want to create a
+[*virtual Cartesian communicator topology*](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node187.htm#Node187) to
+reflect the decomposed geometry in the communicator as well, as this give access to a number of other utility functions
+which makes communicating data easier.
+
+### Halo exchange
+
+In domain decomposition methods, a "halo" refers to a region around the boundary of a sub-domain which contains a copy
+of the data from neighbouring sub-domains needed to perform computations that involve data from adjacent domains.
+The halo region allows neighboring sub-domains to share the required data efficiently, without the need for extensive
+communication.
+
+In a grid-based domain decomposition, as in the image processing example, a halo is often one or more rows of pixels (or
+elements) that surround a sub-domain's internal cells. Similarly, in other data structures like graphs or unstructured
+grids, the halo will be an extension of elements or nodes surrounding the sub-domain.
 
 ![Depiction of halo exchange for 1D decomposition](fig/halo_example_1d.png)
 
-[`MPI_Sendrecv()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Sendrecv_replace.3.php)
+Example below is exchanging a halo in 1D, if image is split into strips instead of rectangles (shown in the diagram
+above).
+
+Use [`MPI_Sendrecv()`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Sendrecv_replace.3.php) for chain communication
+
+![Depiction of chain communication](fig/rank_chain.png)
 
 ```c
 /* Function to convert row and col coordinates into an index for a 1d array */
 int index_into_2d(int row, int col, int num_cols) { return row * num_cols + col; }
+
+/* `rank_image` is actually a little bigger, as we need two extra rows for a halo region for the top
+    and bottom of the row sub-domain */
+double *rank_image = malloc((num_rows + 2) * num_cols * sizeof(double));
 
 /* MPI_Sendrecv is designed for "chain" communications, so we need to figure out the next
    and previous rank. We use `MPI_PROC_NULL` (a special constant) to tell MPI that we don't
@@ -222,27 +309,29 @@ int prev_rank = my_rank - 1 < 0 ? MPI_PROC_NULL : my_rank - 1;
 int next_rank = my_rank + 1 > num_ranks - 1 ? MPI_PROC_NULL : my_rank + 1;
 
 /* Send the top row of the image to the bottom row of the previous rank */
-MPI_Sendrecv(&image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0,
-             &image[index_into_2d(num_rows - 1, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
+MPI_Sendrecv(&rank_image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0,
+             &rank_image[index_into_2d(num_rows - 1, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
              MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
 /* Send the bottom row into top row  of the next rank */
-MPI_Sendrecv(&image[index_into_2d(num_rows - 2, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
-             &image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD,
+MPI_Sendrecv(&rank_image[index_into_2d(num_rows - 2, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
+             &rank_image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD,
              MPI_STATUS_IGNORE);
 ```
 
 > ## Halo exchange in two dimensions
 >
 > The previous code example shows one implementation of halo exchange in one dimension. Following from the code example
-> showing domain decomposition in two dimensions, write down the steps (or some pseudocode) on an implementation of halo
-> exchange in two dimensions.
+> showing domain decomposition in two dimensions, write down the steps (or some pseudocode) for the implementation of
+> domain decomposition and halo exchange in two dimensions.
 >
-> ![Depiction of halo exchange communication pattern](fig/haloexchange.png)
 >
 > > ## Solution
 > >
-> >
+> > TODO:
+> > The important thing to mention is the bookkeeping required for a 2D topology, such as the neighbouring ranks for
+> > halo exchange, the order of ranks and what rectangle of the image has gone to which rank. The last is required so we
+> > can gather the sub-images back together and put them together to re-construct the final image in the correct order.
 > >
 > {: .solution}
 >
