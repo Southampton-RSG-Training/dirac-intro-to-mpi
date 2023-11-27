@@ -200,10 +200,9 @@ Now, let's take a brief look at these fundamental concepts and explore the diffe
 > |Suitable for both distributed memory and shared memory (e.g., SMP) systems, allowing for parallelization across multiple nodes.|Designed for shared memory systems and cannot be used for parallelization across multiple computers.|
 > |Enables parallelism through both processes and threads, providing flexibility for different parallel programming approaches.|Focuses solely on thread-based parallelism, limiting its scope to shared memory environments.|
 > |Creation of process/thread instances and communication can result in higher costs and overhead.|Offers lower overhead, as inter-process communication is handled through shared memory, reducing the need for expensive process/thread creation.|
->
 {: .callout}
 
-## Parallel Paradigms
+## Parallel Paradigms 
 
 Thinking back to shared vs distributed memory models, how to achieve a parallel computation
 is divided roughly into **two paradigms**. Let's set both of these in context:
@@ -240,10 +239,9 @@ just one step (for a factor of $$N$$ speed-up). Let's look into both paradigms i
 >{: .checklist}
 > One standard method for programming using data parallelism is called
 > "OpenMP" (for "**O**pen **M**ulti**P**rocessing").
-> To understand what data parallelism means, let's consider the following bit of OpenMP code which
+> To understand what data parallelism means, let's consider the following bit of OpenMP code which 
 > parallelizes the above loop:
->
-> ~~~c
+> ~~~
 > #pragma omp parallel for
 > for(i=0; i<N; i++) {
 >   a[i] = b[i] + c[i];
@@ -290,10 +288,10 @@ just one step (for a factor of $$N$$ speed-up). Let's look into both paradigms i
 >
 > <img src="fig/dataparallel.png" alt="Each rank has its own data"/>
 > Therefore, each rank essentially operates on its own set of data, regardless of paradigm.
-> In some cases, there are advantages to combining data parallelism and message passing methods
-> together, e.g. when there are problems larger than one GPU can handle. In this case, _data
-> parallelism_ is used for the portion of the problem contained within one GPU, and then _message
-> passing_ is used to employ several GPUs (each GPU handles a part of the problem) unless special
+> In some cases, there are advantages to combining data parallelism and message passing methods 
+> together, e.g. when there are problems larger than one GPU can handle. In this case, _data 
+> parallelism_ is used for the portion of the problem contained within one GPU, and then _message 
+> passing_ is used to employ several GPUs (each GPU handles a part of the problem) unless special 
 > hardware/software supports multiple GPU usage.
 {: .callout}
 
