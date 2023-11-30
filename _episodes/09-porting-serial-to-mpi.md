@@ -17,101 +17,172 @@ keypoints:
 - Continuously compare the developing parallel code with the working serial code
 ---
 
-In this section we will look at converting a complete code rom serial to
-parallel in a couple of steps.
+In this section we will look at converting a complete code from serial to parallel in a number of steps.
 
-The exercises and solutions are based on a code that solves the Poisson's equation using an iterative method.
-In this case the equation describes how heat diffuses in a metal stick.
-In the simulation the stick is split into small sections with a constant
-temperature.
-At one end the amount of heat is set to 10 and at the other to 0.
-The code applies steps that bring each point closer to a solution
-until it reaches an equilibrium.
+## An Example Iterative Poisson Solver
+
+This section is based on a code that solves the Poisson's equation using an iterative method.
+Poisson's equation appears in almost every field in physics, and is frequently used to model many physical phenomena such as heat conduction, and applications of this equation exist for both two and three dimensions.
+In this case, the equation is used in a simplified form to describe how heat diffuses in a one dimensional metal stick.
+
+In the simulation the stick is split into a given number of small sections, each with a constant temperature.
+The temperature of the stick itself across each section is initially set to zero, whilst at one boundary of the stick the amount of heat is set to 10.
+The code applies steps that simulates heat transfer along it, bringing each section of the stick closer to a solution until it reaches a desired equilibrium in temperature along the whole stick.
+
+Let's download the code, which can be found [here](/code/examples/poisson/poisson.c), and take a look at it now.
+
+### At a High Level - main()
+
+We'll begin by looking at the `main()` function at a high level.
 
 ~~~
-/* A serial code for Poisson equation
- * This will apply the diffusion equation to an initial state
- * until an equilibrium state is reached. */
+#define MAX_ITERATIONS 25000
+#define GRIDSIZE 12
 
-/* contact seyong.kim81@gmail.com for comments and questions */
-
-
-#include <stdio.h>
-#include <math.h>
-#include <stdlib.h>
-
-#define GRIDSIZE 10
-
-
-/* Apply a single time step */
-double poisson_step(
-     float *u, float *unew, float *rho,
-     float hsq, int points
-   ){
-   double unorm;
-
-   // Calculate one timestep
-   for( int i=1; i <= points; i++){
-      float difference = u[i-1] + u[i+1];
-      unew[i] = 0.5*( difference - hsq*rho[i] );
-   }
-
-   // Find the difference compared to the previous time step
-   unorm = 0.0;
-   for( int i = 1;i <= points; i++){
-      float diff = unew[i]-u[i];
-      unorm += diff*diff;
-   }
-
-   // Overwrite u with the new value
-   for( int i = 1;i <= points;i++){
-      u[i] = unew[i];
-   }
-
-   return unorm;
-}
+...
 
 int main(int argc, char** argv) {
 
-   // The heat energy in each block
-   float u[GRIDSIZE+2], unew[GRIDSIZE+2], rho[GRIDSIZE+2];
-   int i;
-   float h, hsq;
-   double unorm, residual;
+  // The heat energy in each block
+  float *u, *unew, *rho;
+  float h, hsq;
+  double unorm, residual;
+  int i;
 
-   /* Set up parameters */
-   h = 0.1;
-   hsq = h*h;
-   residual = 1e-5;
+  u = malloc(sizeof(*u) * (GRIDSIZE+2));
+  unew = malloc(sizeof(*unew) * (GRIDSIZE+2));
+  rho = malloc(sizeof(*rho) * (GRIDSIZE+2));
+~~~
+{: .language-c}
 
-   // Initialise the u and rho field to 0
-   for(i=0; i <= GRIDSIZE+1; i++) {
-      u[i] = 0.0;
-      rho[i] = 0.0;
-   }
+It first defines two constants that govern the scale of the simulation:
 
-   // Create a start configuration with the heat energy
-   // u=10 at the x=0 boundary
-   u[0] = 10.0;
+- `MAX_ITERATIONS`: determines the maximum number of iterative steps the code will attempt in order to find a solution with sufficiently low equilibrium
+- `GRIDSIZE`: the number of sections within our stick that will be simulated. Increasing this will increase the number of stick sections to simulate, which increases the processing required
 
-   // Run iterations until the field reaches an equilibrium
-   // and no longer changes
-   for( i=0; i<10000; i++ ) {
-     unorm = poisson_step( u, unew, rho, hsq, GRIDSIZE );
-     printf("Iteration %d: Residue %g\n", i, unorm);
+Next, it declares some arrays used during the iterative calculations:
 
-     if( sqrt(unorm) < sqrt(residual) ){
-       break;
-     }
-   }
+- `u`: each value represents the current temperature of a section in the stick
+- `unew`: during an iterative step, is used to hold the newly calculated temperature of a section in the stick
+- `rho`: holds a separate coefficient for each section of the stick, used as part of the iterative calculation to represent potentially different boundary conditions for each section of the stick. For simplicity, we'll assume completely homogeneous boundary conditions, so these potentials are zero
 
-   printf("Run completed with residue %g\n", unorm);
+Note we are defining our array size with two additional elements, the first of which represents a touching 'boundary' before the stick, i.e. something with a potentially different temperature touching the stick. The second added element is at the end of the stick, representing a similar boundary at the opposite end.
+
+The next step is to initialise the initial conditions of the simulation:
+
+~~~
+  // Set up parameters
+  h = 0.1;
+  hsq = h*h;
+  residual = 1e-5;
+
+  // Initialise the u and rho field to 0
+  for (i = 0; i <= GRIDSIZE+1; i++) {
+    u[i] = 0.0;
+    rho[i] = 0.0;
+  }
+
+  // Create a start configuration with the heat energy
+  // u=10 at the x=0 boundary for rank 1
+  u[0] = 10.0;
+~~~
+{: .language-c}
+
+`residual` here refers to the threshold of temperature equilibrium along the stick we wish to achieve. Once it's within this threshold, the simulation will end. 
+Note that initially, `u` is set entirely to zero, representing a temperature of zero along the length of the stick.
+As noted, `rho` is set to zero here for simplicity.
+
+Remember that additional first element of `u`? Here we set it to a temperature of `10.0` to represent something with that temperature touching the stick at one end, to initiate the process of heat transfer we wish to simulate.
+
+Next, the code iteratively calls `poisson_step()` to calculate the next set of results, until either the maximum number of steps is reached, or a particular measure of the difference in temperature along the stick returned from this function (`unorm`) is below a particular threshold.
+
+~~~
+  // Run iterations until the field reaches an equilibrium
+  // and no longer changes
+  for (i = 0; i < NUM_ITERATIONS; i++) {
+    unorm = poisson_step(u, unew, rho, hsq, GRIDSIZE);
+    if (sqrt(unorm) < sqrt(residual)) break;
+  }
+~~~
+{: .language-c}
+
+Finally, just for show, the code outputs a representation of the result - the end temperature of each section of the stick.
+
+~~~
+  printf("Final result:\n");
+  for (int j = 1; j <= GRIDSIZE; j++) {
+    printf("%d-", (int) u[j]);
+  }
+  printf("\n");
+  printf("Run completed in %d iterations with residue %g\n", i, unorm);
 }
 ~~~
 {: .language-c}
 
+### The Iterative Function - poisson_step()
 
-### Parallel Regions
+The `poisson_step()` progresses the simulation by a single step. After it accepts its arguments, for each section in the stick it calculates a new value based on the temperatures of its neighbours:
+
+~~~
+  for (int i = 1; i <= points; i++) {
+     float difference = u[i-1] + u[i+1];
+     unew[i] = 0.5 * (difference - hsq*rho[i]);
+  }
+~~~
+{: .language-c}
+
+Next, it calculates a value representing the overall cumulative change in temperature along the stick compared to its previous state, which as we saw before, is used to determine if we've reached a stable equilibrium and may exit the simulation:
+
+~~~
+  unorm = 0.0;
+  for (int i = 1;i <= points; i++) {
+     float diff = unew[i]-u[i];
+     unorm += diff*diff;
+  }
+~~~
+{: .language-c}
+
+And finally, the state of the stick is set to the newly calculated values, and `unorm` is returned from the function:
+
+~~~
+  // Overwrite u with the new field
+  for (int i = 1;i <= points;i++) {
+     u[i] = unew[i];
+  }
+
+  return unorm;
+}
+~~~
+{: .language-c}
+
+### Compiling and Running the Poisson Code
+
+You may compile and run the code as follows:
+
+~~~
+gcc poisson.c -o poisson
+./poisson
+~~~
+{: .language-bash}
+
+And should see the following:
+
+~~~
+Final result:
+9-8-7-6-6-5-4-3-3-2-1-0-
+Run completed in 182 iterations with residue 9.60328e-06
+~~~
+{: .output}
+
+Here, we can see a basic representation of the temperature of each section of the stick at the end of the simulation, and how the initial `10.0` temperature applied at the beginning of the stick has transferred along it to this final state.
+
+> ## How Much Longer?
+>
+> Of course, `GRIDSIZE` is set to a very low value of `10` stick sections.
+> Try increasing this value to `512`, `1024`, `2048`and see how much longer 
+
+
+## Parallel Regions
 
 The first step is to identify parts of the code that
 can be written in parallel.
@@ -126,23 +197,19 @@ Can you replace the serial parts with a different, more parallel algorithm?
 
 > ## Parallel Regions
 >
-> Identify any parallel and serial regions in the code.
-> What would be the optimal parallelisation strategy?
+> Looking at the code, which parts would benefit most from parallelisation?
 >
 >> ## Solution
 >>
->> The loops over space can be run in parallel.
->> There are parallisable loops in:
->> * the setup, when initialising the fields.
->> * the calculation of the time step, `unew`.
->> * the difference, `unorm`.
->> * overwriting the field `u`.
->> * writing the files could be done in parallel.
+>> Potentially, the following loops:
+>> 
+>> * the setup, when initialising the fields
+>> * the calculation of each time step, `unew` - this is the most involved of the loops
+>> * calculation of the cumulative temperature difference, `unorm`
+>> * overwriting the field `u` with the result of the new calculation
 >>
->> The best strategy would seem to be parallelising the loops.
->> This will lead to a domain decomposed implementation with the
->> elements of the fields `u` and `rho` divided across the ranks.
->>
+>> As `GRIDSIZE` is increased, these will take proportionally more time to complete.
+>> So ideally, we should attempt an MPI approach that is able to parallelise as many of these loops as possible.
 >{: .solution}
 >
 {: .challenge}
@@ -153,38 +220,17 @@ Can you replace the serial parts with a different, more parallel algorithm?
 ### Write a Parallel Function Thinking About a Single Rank
 
 In the message passing framework, all ranks execute the same code.
-When writing a parallel code with MPI, you should think of a single rank.
+When writing a parallel code with MPI, a good place to start is to
+think about a single rank.
 What does this rank need to do, and what information does it need to do it?
 
-Communicate data in the simplest possible way
-just after it's created or just before it's needed.
-Use blocking or non-blocking communication, whichever you feel is simpler.
-If you use non-blocking functions, call wait immediately.
+When considering communication, a good place to start is to communicate
+data in the simplest possible way just after it's created or just before
+it's needed. Use blocking or non-blocking communication, whichever you feel
+is simpler. If you use non-blocking functions, call wait immediately.
 
 The point is to write a simple code that works correctly.
-You can optimise later.
-
-> ## Selecting Communication Patterns for our Parallel Code
->
-> Which communication pattern(s) should you choose for our parallel code, taking in account:
->
-> - How would you divide the data between the ranks?
-> - When does each rank need data from other ranks?
-> - Which ranks need data from which other ranks?
->
->> ## Solution
->>
->> Only one of the loops requires data from the other ranks, and these are only nearest neighbours.
->>
->> Parallelising the loops would actually be the same thing as splitting the physical volume. Each iteration of the loop
->> accesses one element in the `rho` and `unew` fields and four elements in the `u` field. The `u` field needs to be
->> communicated if the value is stored on a different rank.
->>
->> There is also a global reduction pattern needed for calculating `unorm`. Every node needs to know the result.
->>
->{: .solution}
->
-{: .challenge}
+You can always optimise further later!
 
 > ## Parallel Execution
 >
@@ -201,7 +247,7 @@ You can optimise later.
 >>     float *u, float *unew, float *rho,
 >>     float hsq, int points
 >>   ){
->>   /* We will calculate unorm separately on each rank. It needs to be summed up at the end*/
+>>   /* We will calculate unorm separately on each rank. It needs to be summed up at the end */
 >>   double unorm;
 >>   /* This will be the sum over all ranks */
 >>   double global_unorm;
