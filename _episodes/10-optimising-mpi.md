@@ -1,13 +1,12 @@
 ---
-title: Debugging and Optimising MPI Applications
+title: Optimising MPI Applications
 math: true
-slug: "dirac-intro-to-mpi-debugging-optimising"
+slug: "dirac-intro-to-mpi-optimising"
 teaching: 0
 exercises: 0
 questions:
 - How can we understand how well our code performs as resources increase?
 objectives:
-- Learn how to debug an MPI application
 - Understand and differentiate between strong and weak scaling
 - Understand when and how to profile/optimise an MPI application
 keypoints:
@@ -20,8 +19,6 @@ as we increase the resources available to it, and importantly, *where* we need t
 
 ## Characterising the Scalability of Code
 
-FIXME: reuse some of the HPC Skills code scalability material as an introduction here
-
 The speedup when running a parallel program on multiple processors can
 be defined as
 
@@ -30,13 +27,14 @@ $$ \mathrm{speedup} = t_1 / t_N $$
 where $$t_1$$ is the computational time for running the software using
 one processor, and $$t_N$$ is the computational time running the same
 software with N processors.
+
 - Ideally, we would like software to have a
   linear speedup that is equal to the number of processors (speedup =
   N), as that would mean that every processor would be contributing 100%
   of its computational power.
 - Unfortunately, this is a very challenging goal for real applications to attain.
 
-### Amdahl's Law and strong scaling
+### Amdahl's Law and Strong Scaling
 
 There is a theoretical limit in what parallelization can achieve, and
 it is encapsulated in "Amdahl's Law":
@@ -47,7 +45,9 @@ where $$s$$ is the proportion of execution time spent on the serial
 part, $$p$$ is the proportion of execution time spent on the part that
 can be parallelized, and $$N$$ is the number of processors. Amdahl’s law
 states that, for a fixed problem, the upper limit of speedup is
-determined by the serial fraction of the code. This is called **strong
+determined by the serial fraction of the code - most real world applications
+have some serial portion or unintended delays (such as communication
+overheads) which will limit the code’s scalability. This is called **strong
 scaling** and its consequences can be understood from the figure
 below.
 
