@@ -31,7 +31,7 @@ double poisson_step(
 
   // Find the difference compared to the previous time step
   unorm = 0.0;
-  for( int i = 1;i <= points; i++) {
+  for (int i = 1;i <= points; i++) {
      float diff = unew[i]-u[i];
      unorm += diff*diff;
   }
@@ -40,7 +40,7 @@ double poisson_step(
   MPI_Allreduce(&unorm, &global_unorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
   // Overwrite u with the new field
-  for( int i = 1;i <= points;i++) {
+  for (int i = 1;i <= points;i++) {
      u[i] = unew[i];
   }
 
@@ -57,7 +57,7 @@ double poisson_step(
     MPI_Recv(&recvbuf, 1, MPI_FLOAT, rank-1, 2, MPI_COMM_WORLD, &mpi_status);
     u[0] = recvbuf;
 
-    if ( rank != (n_ranks-1)) {
+    if (rank != (n_ranks-1)) {
       // Send data up to rank+1 (if I'm not the last rank)
       MPI_Send(&u[points], 1, MPI_FLOAT, rank+1, 1, MPI_COMM_WORLD);
       // Receive data from rank+1
@@ -109,7 +109,7 @@ int main(int argc, char** argv) {
   rho = malloc(sizeof(*rho) * (rank_gridsize + 2));
 
   // Set up parameters
-  h = 0.1; 
+  h = 0.1;
   hsq = h*h;
   residual = 1e-5;
 
@@ -120,7 +120,7 @@ int main(int argc, char** argv) {
   }
 
   // Create a start configuration with the heat energy
-  // u=10 at the x=0 boundary for rank 1
+  // u=10 at the x=0 boundary for rank 0
   if (rank == 0)
     u[0] = 10.0;
 
@@ -133,7 +133,6 @@ int main(int argc, char** argv) {
   }
 
   resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
-
   MPI_Gather(u, rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   if (rank == 0) {
@@ -141,8 +140,7 @@ int main(int argc, char** argv) {
     for (int j = 1; j <= GRIDSIZE; j++) {
       printf("%d-", (int) resultbuf[j]);
     }
-    printf("\n");
-    printf("Run completed in %d iterations with residue %g with %d ranks\n", i, unorm, n_ranks);
+    printf("\nRun completed in %d iterations with residue %g with %d ranks\n", i, unorm, n_ranks);
   }
 
   MPI_Finalize();

@@ -71,14 +71,14 @@ int main(int argc, char** argv) {
   // Run iterations until the field reaches an equilibrium
   // and no longer changes
   for (i = 0; i < MAX_ITERATIONS; i++) {
-    unorm = poisson_step( u, unew, rho, hsq, GRIDSIZE);
-    if (sqrt(unorm) < sqrt(residual)) break;
+    unorm = poisson_step(u, unew, rho, hsq, GRIDSIZE);
+    if (sqrt(unorm) < sqrt(residual))
+      break;
   }
 
   printf("Final result:\n");
   for (int j = 1; j <= GRIDSIZE; j++) {
     printf("%d-", (int) u[j]);
   }
-  printf("\n");
-  printf("Run completed in %d iterations with residue %g\n", i, unorm);
+  printf("\nRun completed in %d iterations with residue %g\n", i, unorm);
 }

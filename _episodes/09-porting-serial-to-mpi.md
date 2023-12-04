@@ -21,16 +21,16 @@ In this section we will look at converting a complete code from serial to parall
 
 ## An Example Iterative Poisson Solver
 
-This section is based on a code that solves the Poisson's equation using an iterative method.
+This episode is based on a code that solves the Poisson's equation using an iterative method.
 Poisson's equation appears in almost every field in physics, and is frequently used to model many physical phenomena such as heat conduction, and applications of this equation exist for both two and three dimensions.
 In this case, the equation is used in a simplified form to describe how heat diffuses in a one dimensional metal stick.
 
-In the simulation the stick is split into a given number of small sections, each with a constant temperature.
+In the simulation the stick is split into a given number of slices, each with a constant temperature.
 
-FIXME: add diagram of stick split into sections here
+FIXME: add diagram of stick split into slices here
 
-The temperature of the stick itself across each section is initially set to zero, whilst at one boundary of the stick the amount of heat is set to 10.
-The code applies steps that simulates heat transfer along it, bringing each section of the stick closer to a solution until it reaches a desired equilibrium in temperature along the whole stick.
+The temperature of the stick itself across each slice is initially set to zero, whilst at one boundary of the stick the amount of heat is set to 10.
+The code applies steps that simulates heat transfer along it, bringing each slice of the stick closer to a solution until it reaches a desired equilibrium in temperature along the whole stick.
 
 Let's download the code, which can be found [here](/code/examples/poisson/poisson.c), and take a look at it now.
 
@@ -61,13 +61,13 @@ int main(int argc, char** argv) {
 It first defines two constants that govern the scale of the simulation:
 
 - `MAX_ITERATIONS`: determines the maximum number of iterative steps the code will attempt in order to find a solution with sufficiently low equilibrium
-- `GRIDSIZE`: the number of sections within our stick that will be simulated. Increasing this will increase the number of stick sections to simulate, which increases the processing required
+- `GRIDSIZE`: the number of slices within our stick that will be simulated. Increasing this will increase the number of stick slices to simulate, which increases the processing required
 
 Next, it declares some arrays used during the iterative calculations:
 
-- `u`: each value represents the current temperature of a section in the stick
-- `unew`: during an iterative step, is used to hold the newly calculated temperature of a section in the stick
-- `rho`: holds a separate coefficient for each section of the stick, used as part of the iterative calculation to represent potentially different boundary conditions for each section of the stick. For simplicity, we'll assume completely homogeneous boundary conditions, so these potentials are zero
+- `u`: each value represents the current temperature of a slice in the stick
+- `unew`: during an iterative step, is used to hold the newly calculated temperature of a slice in the stick
+- `rho`: holds a separate coefficient for each slice of the stick, used as part of the iterative calculation to represent potentially different boundary conditions for each stick slice. For simplicity, we'll assume completely homogeneous boundary conditions, so these potentials are zero
 
 Note we are defining each of our array sizes with two additional elements, the first of which represents a touching 'boundary' before the stick, i.e. something with a potentially different temperature touching the stick. The second added element is at the end of the stick, representing a similar boundary at the opposite end.
 
@@ -109,7 +109,7 @@ Next, the code iteratively calls `poisson_step()` to calculate the next set of r
 ~~~
 {: .language-c}
 
-Finally, just for show, the code outputs a representation of the result - the end temperature of each section of the stick.
+Finally, just for show, the code outputs a representation of the result - the end temperature of each slice of the stick.
 
 ~~~
   printf("Final result:\n");
@@ -124,7 +124,7 @@ Finally, just for show, the code outputs a representation of the result - the en
 
 ### The Iterative Function - poisson_step()
 
-The `poisson_step()` progresses the simulation by a single step. After it accepts its arguments, for each section in the stick it calculates a new value based on the temperatures of its neighbours:
+The `poisson_step()` progresses the simulation by a single step. After it accepts its arguments, for each slice in the stick it calculates a new value based on the temperatures of its neighbours:
 
 ~~~
   for (int i = 1; i <= points; i++) {
@@ -177,7 +177,7 @@ Run completed in 182 iterations with residue 9.60328e-06
 ~~~
 {: .output}
 
-Here, we can see a basic representation of the temperature of each section of the stick at the end of the simulation, and how the initial `10.0` temperature applied at the beginning of the stick has transferred along it to this final state.
+Here, we can see a basic representation of the temperature of each slice of the stick at the end of the simulation, and how the initial `10.0` temperature applied at the beginning of the stick has transferred along it to this final state.
 Ordinarily, we might output the full sequence to a file, but we've simplified it for convenience here.
 
 
@@ -187,7 +187,7 @@ So how should we make use of an MPI approach to parallelise this code?
 A good place to start is to consider the nature of the data within this computation, and what we need to achieve.
 
 For a number of iterative steps, currently the code computes the next set of values for the entire stick.
-So at a high level one approach using MPI would be to split this computation by dividing the stick into sections, and have a separate rank responsible for each section which computes iterations for its given section.
+So at a high level one approach using MPI would be to split this computation by dividing the stick into sections each with a number of slices, and have a separate rank responsible for computing iterations for those slices within its given section.
 Essentially then, for simplicity we may consider each section a stick on its own, with either two neighbours at touching boundaries (for middle sections of the stick), or one touching boundary neighbour (for sections at the beginning and end of the stick).
 
 We might also consider subdividing the number of iterations, and parallelise across these instead.
@@ -198,7 +198,7 @@ FIXME: add diagram of subdivided stick
 
 The next step is to consider in more detail this approach to parallelism with our code.
 
-> ## Does it Make Sense?
+> ## Parallelism and Data Exchange
 >
 > Looking at the code, which parts would benefit most from parallelisation,
 > and are there any regions that require data exchange across its processes in order for
@@ -219,7 +219,7 @@ The next step is to consider in more detail this approach to parallelism with ou
 >> to work correctly:
 >>
 >> * Calculation of `unorm` is a sum that requires difference data from all sections of the stick, so we'd need to somehow communicate these difference values to a single rank that computes and receives the overall sum
->> * Each section of the stick does not compute a single step in isolation, it needs boundary data from neighbouring sections of the stick to arrive at its computed temperature value for that step, so we'd need to communicate temperature values between neighbours
+>> * Each section of the stick does not compute a single step in isolation, it needs boundary data from neighbouring sections of the stick to arrive at its computed temperature value for that step, so we'd need to communicate temperature values between neighbours (i.e. using a nearest neighbours communication pattern)
 >{: .solution}
 {: .challenge}
 
@@ -229,169 +229,260 @@ If the serial parts are a significant part of the algorithm, it may not be possi
 
 > ## Serial Regions
 >
-> Examine the code and try to identify any serial regions that can't be parallelised.
+> Examine the code and try to identify any serial regions that can't (or shouldn't) be parallelised.
 > 
 >> ## Solution
 >>
 >> There aren't any large or time consuming serial regions, which is good from a parallelism perspective.
 >> However, there are a couple of small regions that are not amenable to running in parallel:
 >> 
->> * Setting the `10.0` initial temperature condition at the stick 'starting' boundary. We only need to set this once at the starting end of the stick, and not at the boundary of every section of the stick.
->> * Printing a representation of the final result, since this only needs to be done once.
+>> * Setting the `10.0` initial temperature condition at the stick 'starting' boundary. We only need to set this once at the beginning of the stick, and not at the boundary of every section of the stick
+>> * Printing a representation of the final result, since this only needs to be done once to represent the whole stick, and not for every section.
+>> 
+>> So we'd need to ensure only one rank deals with these, which in MPI is typically the zeroth rank.
+>> This also makes sense in terms of our parallelism approach, since the zeroth rank would be the beginning of the stick,
+>> where we'd set the initial boundary temperature.
 >{: .solution}
 {: .challenge}
 
 
-### Write a Parallel Function Thinking About a Single Rank
+## Parallelising our Code
 
-In the message passing framework, all ranks execute the same code.
+So now let's apply what we've learned about MPI together with our consideration of the code.
+
+We'll start at a high level with `main()`, although first add `#include <mpi.h>` at the top of our code so we can make use of MPI.
+We'll do this parallelisation in a number of stages.
+
+In MPI, all ranks execute the same code.
 When writing a parallel code with MPI, a good place to start is to think about a single rank.
 What does this rank need to do, and what information does it need to do it?
 
-When considering communication, a good place to start is to communicate
-data in the simplest possible way just after it's created or just before
-it's needed. Use blocking or non-blocking communication, whichever you feel
-is simpler. If you use non-blocking functions, call wait immediately.
+The first goal should be to write a simple code that works correctly.
+We can always optimise further later!
 
-The point is to write a simple code that works correctly.
-You can always optimise further later!
+### main(): Adding MPI at a High-level
 
-> ## Parallel Execution
->
-> First, just implement a single step.
-> Write a program that performs the iterations from
-> `j=rank*(GRIDSIZE/n_ranks)` to `j=(rank+1)*(GRIDSIZE/n_ranks)`.
-> For this, you should not need to communicate the field `u`.
-> You will need a reduction.
->
+Then as we usually do, let's initialise MPI and obtain our rank and total number of ranks.
+With the latter information, we can then calculate how many slices of the stick this rank will compute.
+Near the top of `main()` add the following:
+
+~~~
+  int rank, n_ranks, rank_gridsize;
+
+  MPI_Init(&argc, &argv);
+
+  // Find the number of slices calculated by each rank
+  // The simple calculation here assumes that GRIDSIZE is divisible by n_ranks
+  MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
+  rank_gridsize = GRIDSIZE / n_ranks;
+~~~
+{: .language-c}
+
+Using `rank_gridsize`, we can now amend our initial array declaration sizes to use this instead:
+
+~~~
+  u = malloc(sizeof(*u) * (rank_gridsize + 2));
+  unew = malloc(sizeof(*unew) * (rank_gridsize + 2));
+  rho = malloc(sizeof(*rho) * (rank_gridsize + 2));
+~~~
+{: .language-c}
+
+Then at the very end of `main()` let's complete our use of MPI:
+
+~~~
+  MPI_Finalize();
+}
+~~~
+{: .language-c}
+
+### main(): Initialising the Simulation and Printing the Result
+
+As we found out in the *Serial Regions* exercise, we need to ensure that only a single rank (rank zero) needs to initiate the starting temperature within it's section, so we need to put a condition on that initialisation:
+
+~~~
+  // Create a start configuration with the heat energy
+  // u=10 at the x=0 boundary for rank 0
+  if (rank == 0)
+    u[0] = 10.0;
+~~~
+{: .language-c}
+
+We also need to collect the overall results from all ranks and output that collected result, but again, only for rank zero.
+To collect the results from all ranks (held in `u`) we can use `MPI_Gather()`, to send all `u` results to rank zero to hold in a results array.
+Note that this will also include the result from rank zero!
+
+Add the following to the list of declarations at the start of `main()`:
+
+~~~
+  float *resultbuf;
+~~~
+{: .language-c}
+
+Then before `MPI_Finalize()` let's amend the code to the following:
+
+~~~
+  resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
+  MPI_Gather(u, rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  
+  if (rank == 0) {
+    printf("Final result:\n");
+    for (int j = 1; j <= GRIDSIZE; j++) {
+      printf("%d-", (int) resultbuf[j]);
+    }
+    printf("\nRun completed in %d iterations with residue %g with %d ranks\n", i, unorm, n_ranks);
+  }
+~~~
+{: .language-c}
+
+`MPI_Gather()` is ideally suited for our purposes, since results from ranks are arranged within `resultbuf` in rank order,
+so we end up with all slices across all ranks representing the entire stick.
+
+### main(): Invoking the Step Function
+
+Before we parallelise the `poisson_step()` function, let's amend how we invoke it and pass it some additional parameters it will need.
+We need to amend how many slices it will compute, and add the `rank` and `n_ranks` variables, since we know from `Parallelism and Data Exchange` that it will need to perform some data exchange with other ranks:
+
+~~~
+    unorm = poisson_step(u, unew, rho, hsq, rank_gridsize, rank, n_ranks );
+~~~
+{: .language-c}
+
+### poisson_step(): Updating our Function Definition
+
+Moving into the `poisson_step()` function, we first amend our function to include the changes to parameters:
+
+~~~
+double poisson_step(
+  float *u, float *unew, float *rho,
+  float hsq, int points,
+  int rank, int n_ranks
+) {
+~~~
+{: .language-c}
+
+### poisson_step(): Calculating a Global `unorm`
+
+We know from `Parallelism and Data Exchange` that we need to calculate `unorm` across all ranks.
+We already have it calculated for separate ranks, so need to *reduce* those values in an MPI sense to a single summed value.
+For this, we can use `MPI_Allreduce()`.
+
+Insert the following into the `poisson_step()` function, putting the declarations at the top of the function,
+and the `MPI_Allreduce()` after the calculation of `unorm`:
+
+~~~
+  double unorm, global_unorm;
+  
+  MPI_Allreduce(&unorm, &global_unorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
+~~~
+{: .language-c}
+
+So here, we use this function in an `MPI_SUM` mode, which will sum all instances of `unorm` and place the result in a single (`1`) value global_unorm`.
+We must also remember to amend the return value to this global version, since we need to calculate equilibrium across the entire stick:
+
+~~~
+  return global_unorm;
+}
+~~~
+{: .language-c}
+
+### poisson_step(): Communicate Boundaries to Neighbours
+
+In order for our parallel code to work, we know from `Parallelism and Data Exchange` that each section of slices is not computed in isolation.
+After we've computed new values we need to send our boundary slice values to our neighbours if those neighbours exist -
+the beginning and end of the stick will each only have one neighbour, so we need to account for that.
+
+FIXME: add diagram showing rank data exchange for odds & evens
+
+We also need to ensure that we don't encounter a deadlock situation when exchanging the data between neighbours.
+They can't all send to the rightmost neighbour simultaneously, since none will then be waiting and able to receive.
+We need a message exchange strategy here, so let's have all odd-numbered ranks send their data first (to be received by even ranks),
+then have our even ranks send their data (to be received by odd ranks).
+
+So following the `MPI_Allreduce()` we've just added, let's deal with odd ranks first (again, put the declarations at the top of the function):
+
+~~~
+  float sendbuf, recvbuf;
+  MPI_Status mpi_status;
+
+  // The u field has been changed, communicate it to neighbours
+  // With blocking communication, half the ranks should send first
+  // and the other half should receive first
+  if ((rank%2) == 1) {
+    // Ranks with odd number send first
+
+    // Send data down from rank to rank-1
+    sendbuf = unew[1];
+    MPI_Send(&sendbuf, 1, MPI_FLOAT, rank-1, 1, MPI_COMM_WORLD);
+    // Receive dat from rank-1
+    MPI_Recv(&recvbuf, 1, MPI_FLOAT, rank-1, 2, MPI_COMM_WORLD, &mpi_status);
+    u[0] = recvbuf;
+
+    if (rank != (n_ranks-1)) {
+      // Send data up to rank+1 (if I'm not the last rank)
+      MPI_Send(&u[points], 1, MPI_FLOAT, rank+1, 1, MPI_COMM_WORLD);
+      // Receive data from rank+1
+      MPI_Recv(&u[points+1], 1, MPI_FLOAT, rank+1, 2, MPI_COMM_WORLD, &mpi_status);
+    }
+~~~
+{: .language-c}
+
+Here we use C's inbuilt modulus operator (`%`) to determine if the rank is odd.
+If so, we exchange some data with the rank preceding us, and the one following.
+
+We first send our newly computed leftmost value (at position `1` in our array) to the rank preceding us.
+Since we're an odd rank, we can always assume a rank preceding us exists,
+since the earliest odd rank 1 will exchange with rank 0.
+Then, we receive the rightmost boundary value from that rank.
+
+Then, if the rank following us exists, we do the same, but this time we send the rightmost value at the end of our stick section,
+and receive the corresponding value from that rank.
+
+These exchanges mean that - as an even rank - we now have effectively exchanged the states of the start and end of our slices with our respective neighbours.
+And now we need to do the same for those neighbours (the even ranks), in the opposite order of receive/send:
+
+~~~
+  } else {
+    // Ranks with even number receive first
+
+    if (rank != 0) {
+      // Receive data from rank-1 (if I'm not the first rank)
+      MPI_Recv(&u[0], 1, MPI_FLOAT, rank-1, 1, MPI_COMM_WORLD, &mpi_status);
+      // Send data down to rank-1
+      MPI_Send(&u[1], 1, MPI_FLOAT, rank-1, 2, MPI_COMM_WORLD);
+    }
+
+    if (rank != (n_ranks-1)) {
+      // Receive data from rank+1 (if I'm not the last rank)
+      MPI_Recv(&u[points+1], 1, MPI_FLOAT, rank+1, 1, MPI_COMM_WORLD, &mpi_status);
+      // Send data up to rank+1
+      MPI_Send(&u[points], 1, MPI_FLOAT, rank+1, 2, MPI_COMM_WORLD);
+    }
+  }
+~~~
+{: .language-c}
+
+Once complete across all ranks, every rank will then have the slice boundary data from its neighbours ready for the next iteration.
+
+
+
+> ## Limitations!
+> 
+> You may remember that for the purposes of this episode we've assumed a homogeneous stick,
+> by setting the `rho` coefficient to zero for every slice.
+> If we wanted to address this limitation and model an inhomogeneous stick with different static coefficients for each slice,
+> how could we amend our code to allow this correctly for each slice?
+> 
 >> ## Solution
 >>
->>~~~
->> double poisson_step(
->>     float *u, float *unew, float *rho,
->>     float hsq, int points
->>   ){
->>   /* We will calculate unorm separately on each rank. It needs to be summed up at the end */
->>   double unorm;
->>   /* This will be the sum over all ranks */
->>   double global_unorm;
+>> One way would be to create a static lookup array with a `GRIDSIZE` number of elements.
+>> This could be defined in a separate `.h` file and `#include`-d.
+>> Each rank could then read the `rho` values for the specific slices in its section from the array and use those.
+>> At initialisation, instead of setting it to zero we could do:
 >>
->>   // Calculate one timestep
->>   for( int i=1; i <= points; i++){
->>      float difference = u[i-1] + u[i+1];
->>      unew[i] = 0.5*( difference - hsq*rho[i] );
->>   }
->>
->>   // Find the difference compared to the previous time step
->>   unorm = 0.0;
->>   for( int i = 1;i <= points; i++){
->>      float diff = unew[i]-u[i];
->>      unorm += diff*diff;
->>   }
->>
->>   // Use Allreduce to calculate the sum over ranks
->>   MPI_Allreduce( &unorm, &global_unorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
->>
->>   // Overwrite u with the new field
->>   for( int i = 1;i <= points;i++){
->>      u[i] = unew[i];
->>   }
->>
->>   // Return the sum over all ranks
->>   return global_unorm;
->> }
->>~~~
->>{: .source .language-c}
+>> ~~~
+>>     rho[i] = rho_coefficients[(rank * rank_gridsize) + i]
+>> ~~~
+>> {: .language-c}
 >{: .solution}
 {: .challenge}
-
-> ## Communication
->
-> Add in the nearest neighbour communication.
->
->> ## Solution
->> Each rank needs to send the values at `u[1]` down to `rank-1` and
->> the values at `u[my_j_max]` to `rank+1`.
->> There needs to be an exception for the first and the last rank.
->>
->>~~~
->> double poisson_step(
->>   float *u, float *unew, float *rho,
->>   float hsq, int points
->> ){
->>   double unorm, global_unorm;
->>   float sendbuf, recvbuf;
->>   MPI_Status mpi_status;
->>   int rank, n_ranks;
->>
->>   /* Find the number of x-slices calculated by each rank */
->>   /* The simple calculation here assumes that GRIDSIZE is divisible by n_ranks */
->>   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
->>   MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
->>
->>   // Calculate one timestep
->>   for( int i=1; i <= points; i++){
->>      float difference = u[i-1] + u[i+1];
->>      unew[i] = 0.5*( difference - hsq*rho[i] );
->>   }
->>
->>   // Find the difference compared to the previous time step
->>   unorm = 0.0;
->>   for( int i = 1;i <= points; i++){
->>      float diff = unew[i]-u[i];
->>      unorm += diff*diff;
->>   }
->>
->>   // Use Allreduce to calculate the sum over ranks
->>   MPI_Allreduce( &unorm, &global_unorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
->>
->>   // Overwrite u with the new field
->>   for( int i = 1;i <= points;i++){
->>      u[i] = unew[i];
->>   }
->>
->>   // The u field has been changed, communicate it to neighbours
->>   // With blocking communication, half the ranks should send first
->>   // and the other half should receive first
->>   if ((rank%2) == 1) {
->>     // Ranks with odd number send first
->>
->>     // Send data down from rank to rank-1
->>     sendbuf = unew[1];
->>     MPI_Send(&sendbuf,1,MPI_FLOAT,rank-1,1,MPI_COMM_WORLD);
->>     // Receive dat from rank-1
->>     MPI_Recv(&recvbuf,1,MPI_FLOAT,rank-1,2,MPI_COMM_WORLD,&mpi_status);
->>     u[0] = recvbuf;
->>
->>     if ( rank != (n_ranks-1)) {
->>       // Send data up to rank+1 (if I'm not the last rank)
->>       MPI_Send(&u[points],1,MPI_FLOAT,rank+1,1,MPI_COMM_WORLD);
->>       // Receive data from rank+1
->>       MPI_Recv(&u[points+1],1,MPI_FLOAT,rank+1,2,MPI_COMM_WORLD,&mpi_status);
->>     }
->>
->>   } else {
->>     // Ranks with even number receive first
->>
->>     if (rank != 0) {
->>       // Receive data from rank-1 (if I'm not the first rank)
->>       MPI_Recv(&u[0],1,MPI_FLOAT,rank-1,1,MPI_COMM_WORLD,&mpi_status);
->>       // Send data down to rank-1
->>       MPI_Send(&u[1],1,MPI_FLOAT,rank-1,2,MPI_COMM_WORLD);
->>     }
->>
->>     if (rank != (n_ranks-1)) {
->>       // Receive data from rank+1 (if I'm not the last rank)
->>       MPI_Recv(&u[points+1],1,MPI_FLOAT,rank+1,1,MPI_COMM_WORLD,&mpi_status);
->>       // Send data up to rank+1
->>       MPI_Send(&u[points],1,MPI_FLOAT,rank+1,2,MPI_COMM_WORLD);
->>     }
->>   }
->>
->>   return global_unorm;
->> }
->>~~~
->>{: .source .language-c}
->{: .solution}
-{: .challenge}
-
