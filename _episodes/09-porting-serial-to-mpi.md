@@ -26,6 +26,9 @@ Poisson's equation appears in almost every field in physics, and is frequently u
 In this case, the equation is used in a simplified form to describe how heat diffuses in a one dimensional metal stick.
 
 In the simulation the stick is split into a given number of small sections, each with a constant temperature.
+
+FIXME: add diagram of stick split into sections here
+
 The temperature of the stick itself across each section is initially set to zero, whilst at one boundary of the stick the amount of heat is set to 10.
 The code applies steps that simulates heat transfer along it, bringing each section of the stick closer to a solution until it reaches a desired equilibrium in temperature along the whole stick.
 
@@ -66,7 +69,7 @@ Next, it declares some arrays used during the iterative calculations:
 - `unew`: during an iterative step, is used to hold the newly calculated temperature of a section in the stick
 - `rho`: holds a separate coefficient for each section of the stick, used as part of the iterative calculation to represent potentially different boundary conditions for each section of the stick. For simplicity, we'll assume completely homogeneous boundary conditions, so these potentials are zero
 
-Note we are defining our array size with two additional elements, the first of which represents a touching 'boundary' before the stick, i.e. something with a potentially different temperature touching the stick. The second added element is at the end of the stick, representing a similar boundary at the opposite end.
+Note we are defining each of our array sizes with two additional elements, the first of which represents a touching 'boundary' before the stick, i.e. something with a potentially different temperature touching the stick. The second added element is at the end of the stick, representing a similar boundary at the opposite end.
 
 The next step is to initialise the initial conditions of the simulation:
 
@@ -175,53 +178,74 @@ Run completed in 182 iterations with residue 9.60328e-06
 {: .output}
 
 Here, we can see a basic representation of the temperature of each section of the stick at the end of the simulation, and how the initial `10.0` temperature applied at the beginning of the stick has transferred along it to this final state.
+Ordinarily, we might output the full sequence to a file, but we've simplified it for convenience here.
 
-> ## How Much Longer?
+
+## Approaching Parallelism
+
+So how should we make use of an MPI approach to parallelise this code?
+A good place to start is to consider the nature of the data within this computation, and what we need to achieve.
+
+For a number of iterative steps, currently the code computes the next set of values for the entire stick.
+So at a high level one approach using MPI would be to split this computation by dividing the stick into sections, and have a separate rank responsible for each section which computes iterations for its given section.
+Essentially then, for simplicity we may consider each section a stick on its own, with either two neighbours at touching boundaries (for middle sections of the stick), or one touching boundary neighbour (for sections at the beginning and end of the stick).
+
+We might also consider subdividing the number of iterations, and parallelise across these instead.
+However, this is far less compelling since each step is completely dependent on the results of the prior step,
+so by its nature steps must be done serially.
+
+FIXME: add diagram of subdivided stick
+
+The next step is to consider in more detail this approach to parallelism with our code.
+
+> ## Does it Make Sense?
 >
-> Of course, `GRIDSIZE` is set to a very low value of `10` stick sections.
-> Try increasing this value to `512`, `1024`, `2048`and see how much longer 
-
-
-## Parallel Regions
-
-The first step is to identify parts of the code that
-can be written in parallel.
-Go through the algorithm and decide for each region if the data can be partitioned for parallel execution,
-or if certain tasks can be separated and run in parallel.
-
-Can you find large or time consuming serial regions?
-The sum of the serial regions gives the minimum amount of time it will take to run the program.
-If the serial parts are a significant part of the algorithm, it may not be possible to write an efficient parallel version.
-Can you replace the serial parts with a different, more parallel algorithm?
-
-
-> ## Parallel Regions
->
-> Looking at the code, which parts would benefit most from parallelisation?
+> Looking at the code, which parts would benefit most from parallelisation,
+> and are there any regions that require data exchange across its processes in order for
+> the simulation to work as we intend?
 >
 >> ## Solution
 >>
->> Potentially, the following loops:
+>> Potentially, the following regions could be executed in parallel:
 >> 
->> * the setup, when initialising the fields
->> * the calculation of each time step, `unew` - this is the most involved of the loops
->> * calculation of the cumulative temperature difference, `unorm`
->> * overwriting the field `u` with the result of the new calculation
+>> * The setup, when initialising the fields
+>> * The calculation of each time step, `unew` - this is the most computationally intensive of the loops
+>> * Calculation of the cumulative temperature difference, `unorm`
+>> * Overwriting the field `u` with the result of the new calculation
 >>
->> As `GRIDSIZE` is increased, these will take proportionally more time to complete.
->> So ideally, we should attempt an MPI approach that is able to parallelise as many of these loops as possible.
+>> As `GRIDSIZE` is increased, these will take proportionally more time to complete, so may benefit from parallelisation.
+>>
+>> However, there are a few regions in the code that will require exchange of data across the parallel executions
+>> to work correctly:
+>>
+>> * Calculation of `unorm` is a sum that requires difference data from all sections of the stick, so we'd need to somehow communicate these difference values to a single rank that computes and receives the overall sum
+>> * Each section of the stick does not compute a single step in isolation, it needs boundary data from neighbouring sections of the stick to arrive at its computed temperature value for that step, so we'd need to communicate temperature values between neighbours
 >{: .solution}
->
 {: .challenge}
 
+We also need to identify any sizeable serial regions.
+The sum of the serial regions gives the minimum amount of time it will take to run the program.
+If the serial parts are a significant part of the algorithm, it may not be possible to write an efficient parallel version.
 
+> ## Serial Regions
+>
+> Examine the code and try to identify any serial regions that can't be parallelised.
+> 
+>> ## Solution
+>>
+>> There aren't any large or time consuming serial regions, which is good from a parallelism perspective.
+>> However, there are a couple of small regions that are not amenable to running in parallel:
+>> 
+>> * Setting the `10.0` initial temperature condition at the stick 'starting' boundary. We only need to set this once at the starting end of the stick, and not at the boundary of every section of the stick.
+>> * Printing a representation of the final result, since this only needs to be done once.
+>{: .solution}
+{: .challenge}
 
 
 ### Write a Parallel Function Thinking About a Single Rank
 
 In the message passing framework, all ranks execute the same code.
-When writing a parallel code with MPI, a good place to start is to
-think about a single rank.
+When writing a parallel code with MPI, a good place to start is to think about a single rank.
 What does this rank need to do, and what information does it need to do it?
 
 When considering communication, a good place to start is to communicate
