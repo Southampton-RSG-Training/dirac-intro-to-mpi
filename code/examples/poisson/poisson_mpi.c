@@ -40,7 +40,7 @@ double poisson_step(
   MPI_Allreduce(&unorm, &global_unorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
   // Overwrite u with the new field
-  for (int i = 1;i <= points;i++) {
+  for (int i = 1;i <= points; i++) {
      u[i] = unew[i];
   }
 
@@ -132,15 +132,16 @@ int main(int argc, char** argv) {
       break;
   }
 
-  resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
-  MPI_Gather(u, rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  // Gather results from all ranks
+  // We need to send data starting from the second element of u, since u[0] is a boundary  resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
+  MPI_Gather(&u[1], rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   if (rank == 0) {
     printf("Final result:\n");
-    for (int j = 1; j <= GRIDSIZE; j++) {
+    for (int j = ; j < GRIDSIZE; j++) {
       printf("%d-", (int) resultbuf[j]);
     }
-    printf("\nRun completed in %d iterations with residue %g with %d ranks\n", i, unorm, n_ranks);
+    printf("\nRun completed in %d iterations with residue %g\n", i, unorm, n_ranks);
   }
 
   MPI_Finalize();

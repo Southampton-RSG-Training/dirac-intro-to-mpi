@@ -33,7 +33,7 @@ double poisson_step(
   }
 
   // Overwrite u with the new field
-  for (int i = 1;i <= points;i++) {
+  for (int i = 1;i <= points; i++) {
      u[i] = unew[i];
   }
 

@@ -7,7 +7,7 @@ questions:
 - What is the best way to write a parallel code?
 - How do I parallelise my existing serial code?
 objectives:
-- Learn how to identify which parts of a codebase should be parallelised
+- Practice how to identify which parts of a codebase would benefit from parallelisation, and those that need to be done serially or only once
 - Convert a serial code into a parallel code
 - Differentiate between choices of communication pattern and algorithm design
 keypoints:
@@ -249,6 +249,15 @@ If the serial parts are a significant part of the algorithm, it may not be possi
 ## Parallelising our Code
 
 So now let's apply what we've learned about MPI together with our consideration of the code.
+First, make a copy of the `poisson.c` code that we will work on (don't modify the original, we'll need this later!).
+In the shell, for example:
+
+~~~
+cp poisson.c poisson_mpi.c
+~~~
+{: .language-bash}
+
+And then we can add our MPI parallelisation modifications to `poisson_mpi.c`
 
 We'll start at a high level with `main()`, although first add `#include <mpi.h>` at the top of our code so we can make use of MPI.
 We'll do this parallelisation in a number of stages.
@@ -298,6 +307,17 @@ Then at the very end of `main()` let's complete our use of MPI:
 
 ### main(): Initialising the Simulation and Printing the Result
 
+Since we're not initialising for the entire stick (`GRIDSIZE`) but just the section apportioned to our rank (`rank_gridsize`), we need to amend the loop that initialises `u` and `rho` accordingly, to:
+
+~~~
+  // Initialise the u and rho field to 0
+  for (i = 0; i <= rank_gridsize+1; i++) {
+    u[i] = 0.0;
+    rho[i] = 0.0;
+  }
+~~~
+{: .language-c}
+
 As we found out in the *Serial Regions* exercise, we need to ensure that only a single rank (rank zero) needs to initiate the starting temperature within it's section, so we need to put a condition on that initialisation:
 
 ~~~
@@ -322,21 +342,27 @@ Add the following to the list of declarations at the start of `main()`:
 Then before `MPI_Finalize()` let's amend the code to the following:
 
 ~~~
+  // Gather results from all ranks
+  // We need to send data starting from the second element of u, since u[0] is a boundary
   resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
-  MPI_Gather(u, rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
+  MPI_Gather(&u[1], rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
   
   if (rank == 0) {
     printf("Final result:\n");
-    for (int j = 1; j <= GRIDSIZE; j++) {
+    for (int j = 0; j < GRIDSIZE; j++) {
       printf("%d-", (int) resultbuf[j]);
     }
-    printf("\nRun completed in %d iterations with residue %g with %d ranks\n", i, unorm, n_ranks);
+    printf("\nRun completed in %d iterations with residue %g\n", i, unorm);
   }
 ~~~
 {: .language-c}
 
 `MPI_Gather()` is ideally suited for our purposes, since results from ranks are arranged within `resultbuf` in rank order,
 so we end up with all slices across all ranks representing the entire stick.
+However, note that we need to send our data starting from `u[1]`, since `u[0]` is the section's boundary value we don't want to include.
+
+This has an interesting effect we need to account for - note the change to the `for` loop.
+Since we are gathering data from each rank (including rank 0) starting from `u[1]`, `resultbuf` will not contain any section boundary values so our loop no longer needs to skip the first value.
 
 ### main(): Invoking the Step Function
 
@@ -464,13 +490,55 @@ And now we need to do the same for those neighbours (the even ranks), in the opp
 
 Once complete across all ranks, every rank will then have the slice boundary data from its neighbours ready for the next iteration.
 
+### Running our Parallel Code
 
+Now we have the parallelised code in place, we can compile and run it, e.g.:
+
+~~~
+mpicc poisson_mpi.c -o poisson_mpi
+mpirun -n 2 poisson_mpi
+~~~
+{: .language-bash}
+
+~~~
+Final result:
+9-8-7-6-6-5-4-3-3-2-1-0-
+Run completed in 182 iterations with residue 9.60328e-06
+~~~
+{: .output}
+
+Note that as it stands, the implementation assumes that `GRIDSIZE` is divisible by `n_ranks`.
+So to guarantee correct output, we should use only 
+
+### Testing our Parallel Code
+
+We should always ensure that as our parallel version is developed, that it behaves the same as our serial version.
+This may not be possible initially, particularly as large parts of the code need converting to use MPI, but where possible, we should continue to test. So we should test once we have an initial MPI version, and as our code develops, perhaps with new optimisations to improve performance, we should test then too.
+
+> ## An Initial Test
+> 
+> Test the mpi version of your code against the serial version, using 1, 2, 3, and 4 ranks with the MPI version.
+> Are the results as you would expect?
+> What happens if you test with 5 ranks, and why?
+> 
+> > ## Solution
+> >
+> > Using these ranks, the MPI results should be the same as our serial version.
+> > Using 5 ranks, our MPI version yields `9-8-7-6-5-4-3-2-1-0-0-0-` which is incorrect.
+> > This is because the `rank_gridsize = GRIDSIZE / n_ranks` calculation becomes `rank_gridsize = 12 / 5`, which produces 2.4.
+> > This is then converted to the integer 2, which means each of the 5 ranks is only operating on 2 slices each, for a total of 10 slices.
+> > This doesn't fill `resultbuf` with results representing an expected `GRIDSIZE` of 12, hence the incorrect answer.
+> >
+> > This highlights another aspect of complexity we need to take into account when writing such parallel implementations, where we must ensure a problem space is correctly subdivided.
+> > In this case, we could implement a more careful way to subdivide the slices across the ranks, with some ranks obtaining more slices to make up the shortfall correctly.
+>{: .solution}
+{: .challenge}
 
 > ## Limitations!
 > 
 > You may remember that for the purposes of this episode we've assumed a homogeneous stick,
 > by setting the `rho` coefficient to zero for every slice.
-> If we wanted to address this limitation and model an inhomogeneous stick with different static coefficients for each slice,
+> As a thought experiment, if we wanted to address this limitation and model an inhomogeneous stick with different static coefficients for each slice,
 > how could we amend our code to allow this correctly for each slice?
 > 
 >> ## Solution
