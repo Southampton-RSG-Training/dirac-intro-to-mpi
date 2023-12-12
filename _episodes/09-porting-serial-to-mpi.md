@@ -539,12 +539,12 @@ This may not be possible initially, particularly as large parts of the code need
 > You may remember that for the purposes of this episode we've assumed a homogeneous stick,
 > by setting the `rho` coefficient to zero for every slice.
 > As a thought experiment, if we wanted to address this limitation and model an inhomogeneous stick with different static coefficients for each slice,
-> how could we amend our code to allow this correctly for each slice?
+> how could we amend our code to allow this correctly for each slice across all ranks?
 > 
 >> ## Solution
 >>
 >> One way would be to create a static lookup array with a `GRIDSIZE` number of elements.
->> This could be defined in a separate `.h` file and `#include`-d.
+>> This could be defined in a separate `.h` file and imported using `#include`.
 >> Each rank could then read the `rho` values for the specific slices in its section from the array and use those.
 >> At initialisation, instead of setting it to zero we could do:
 >>
