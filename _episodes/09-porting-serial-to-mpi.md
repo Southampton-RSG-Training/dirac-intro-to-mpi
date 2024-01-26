@@ -25,9 +25,9 @@ This episode is based on a code that solves the Poisson's equation using an iter
 Poisson's equation appears in almost every field in physics, and is frequently used to model many physical phenomena such as heat conduction, and applications of this equation exist for both two and three dimensions.
 In this case, the equation is used in a simplified form to describe how heat diffuses in a one dimensional metal stick.
 
-In the simulation the stick is split into a given number of slices, each with a constant temperature.
+In the simulation the stick is split into a given number of slices, each with its own temperature.
 
-FIXME: add diagram of stick split into slices here
+![Stick divided into separate slices with touching boundaries at each end](fig/poisson_stick.png)
 
 The temperature of the stick itself across each slice is initially set to zero, whilst at one boundary of the stick the amount of heat is set to 10.
 The code applies steps that simulates heat transfer along it, bringing each slice of the stick closer to a solution until it reaches a desired equilibrium in temperature along the whole stick.
@@ -188,13 +188,13 @@ A good place to start is to consider the nature of the data within this computat
 
 For a number of iterative steps, currently the code computes the next set of values for the entire stick.
 So at a high level one approach using MPI would be to split this computation by dividing the stick into sections each with a number of slices, and have a separate rank responsible for computing iterations for those slices within its given section.
-Essentially then, for simplicity we may consider each section a stick on its own, with either two neighbours at touching boundaries (for middle sections of the stick), or one touching boundary neighbour (for sections at the beginning and end of the stick).
+Essentially then, for simplicity we may consider each section a stick on its own, with either two neighbours at touching boundaries (for middle sections of the stick), or one touching boundary neighbour (for sections at the beginning and end of the stick, which also have either a start or end stick boundary touching them). For example, considering a `GRIDSIZE` of 12 and three ranks:
+
+![Stick divisions subdivided across ranks](fig/poisson_stick_subdivided.png)
 
 We might also consider subdividing the number of iterations, and parallelise across these instead.
 However, this is far less compelling since each step is completely dependent on the results of the prior step,
 so by its nature steps must be done serially.
-
-FIXME: add diagram of subdivided stick
 
 The next step is to consider in more detail this approach to parallelism with our code.
 
