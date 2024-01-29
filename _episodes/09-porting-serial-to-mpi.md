@@ -418,12 +418,13 @@ In order for our parallel code to work, we know from `Parallelism and Data Excha
 After we've computed new values we need to send our boundary slice values to our neighbours if those neighbours exist -
 the beginning and end of the stick will each only have one neighbour, so we need to account for that.
 
-FIXME: add diagram showing rank data exchange for odds & evens
-
 We also need to ensure that we don't encounter a deadlock situation when exchanging the data between neighbours.
 They can't all send to the rightmost neighbour simultaneously, since none will then be waiting and able to receive.
 We need a message exchange strategy here, so let's have all odd-numbered ranks send their data first (to be received by even ranks),
 then have our even ranks send their data (to be received by odd ranks).
+Such an order might look like this (highlighting the odd ranks - only one in this example - with the order of communications indicated numerically):
+
+![Communication strategy - odd ranks send to potential neighbours first, then receive from them](fig/poisson_comm_strategy_1.png)
 
 So following the `MPI_Allreduce()` we've just added, let's deal with odd ranks first (again, put the declarations at the top of the function):
 
@@ -464,8 +465,12 @@ Then, we receive the rightmost boundary value from that rank.
 Then, if the rank following us exists, we do the same, but this time we send the rightmost value at the end of our stick section,
 and receive the corresponding value from that rank.
 
-These exchanges mean that - as an even rank - we now have effectively exchanged the states of the start and end of our slices with our respective neighbours.
-And now we need to do the same for those neighbours (the even ranks), in the opposite order of receive/send:
+These exchanges mean that - as an odd rank - we now have effectively exchanged the states of the start and end of our slices with our respective neighbours.
+
+And now we need to do the same for those neighbours (the even ranks), mirroring the same communication pattern but in the opposite order of receive/send.
+From the perspective of evens, it should look like the following (highlighting the two even ranks):
+
+![Communication strategy - even ranks first receive from odd ranks, then send to them](fig/poisson_comm_strategy_2.png)
 
 ~~~
   } else {
