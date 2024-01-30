@@ -13,26 +13,43 @@ keypoints:
 -
 ---
 
-Now we have some parallelised code, we may want to consider optimising it to make more efficient use of
-its parallelisation. But before we do that, it's really helpful to understand how well our code *scales*
-as we increase the resources available to it, and importantly, *where* we need to optimise.
+Now we have parallelised our code, we should determine how well it performs.
+Given the various ways code can be parallellised, the underlying scientific implementation,
+and the type and amount of data the code is expected to process,
+the performance of different parallelised code can vary hugely under different circumstances,
+particularly given different numbers of CPUs assigned to running the code in parallel.
+It's a good idea to understand how the code will operate in a parallel sense,
+in order to make best (in particular, efficient) use of underlying HPC infrastructure.
+Also, we may want to consider how best to optimise the code to make more efficient use of
+its parallelisation.
+
+Therefore, it's really helpful to understand how well our code *scales* in performance terms
+as we increase the resources available to it.
 
 ## Characterising the Scalability of Code
 
-The speedup when running a parallel program on multiple processors can
-be defined as
+We first need a means to measure the performance increase of a particular program as we assign more processors to it,
+i.e. the speedup.
+
+The speedup when running a parallel program on multiple processors can be defined as
 
 $$ \mathrm{speedup} = t_1 / t_N $$
 
-where $$t_1$$ is the computational time for running the software using
-one processor, and $$t_N$$ is the computational time running the same
-software with N processors.
+Where:
 
-- Ideally, we would like software to have a
-  linear speedup that is equal to the number of processors (speedup =
-  N), as that would mean that every processor would be contributing 100%
-  of its computational power.
-- Unfortunately, this is a very challenging goal for real applications to attain.
+- $$t_1$$ is the computational time for running the software using
+one processor
+- $$t_N$$ is the computational time running the same
+software with N processors
+
+Ideally, we would like software to have a linear speedup that is equal to the number of processors
+(speedup = N), as that would mean that every processor would be contributing 100% of its computational power.
+Unfortunately, this is a very challenging goal for real applications to attain,
+since there is always an overhead to making parallel use of greater resources.
+In addition, in a program there is always some portion of it which must be executed in serial
+(such as initialisation routines, I/O operations and inter-communication) which cannot be parallelised.
+This limits how much a program can be speeded up,
+as the program will always take at least the length of the serial portion.
 
 ### Amdahl's Law and Strong Scaling
 
@@ -41,19 +58,24 @@ it is encapsulated in "Amdahl's Law":
 
 $$ \mathrm{speedup} = 1 / (s + p / N) $$
 
-where $$s$$ is the proportion of execution time spent on the serial
-part, $$p$$ is the proportion of execution time spent on the part that
-can be parallelized, and $$N$$ is the number of processors. Amdahl’s law
-states that, for a fixed problem, the upper limit of speedup is
+Where:
+
+- $$s$$ is the proportion of execution time spent on the serial
+part
+- $$p$$ is the proportion of execution time spent on the part that
+can be parallelized
+- $$N$$ is the number of processors
+
+Amdahl’s law states that, for a fixed problem, the upper limit of speedup is
 determined by the serial fraction of the code - most real world applications
 have some serial portion or unintended delays (such as communication
 overheads) which will limit the code’s scalability. This is called **strong
 scaling** and its consequences can be understood from the figure
 below.
 
-<img src="fig/scaling_amdahl.png" alt="A figure showing strong scaling"/>
+![A figure showing strong scaling](fig/scaling_amdahl.png)
 
-> ## Amdahl's law in practice
+> ## Amdahl's Law in Practice
 >
 > Consider a program that takes 20 hours
 > to run using one core. If a particular part of the
@@ -66,21 +88,91 @@ below.
 > limited to at most 20 times (when N = ∞, speedup = 1/s = 20).
 {: .callout}
 
-#### Strong scaling
+**Strong scaling** is defined as how the solution time varies with the number of
+processors for a *fixed total problem size*.
+Linear **strong** scaling if the speedup (work units completed per
+unit time) is equal to the number of processing elements used.
+It's harder to achieve good strong-scaling at larger process counts since
+communication overhead typically increases with the number of
+processes used.
 
-- Defined as how the solution time varies with the number of
-  processors for a *fixed total problem size*.
-- Linear **strong** scaling if the speedup (work units completed per
-  unit time) is equal to the number of processing elements used.
-- Harder to achieve good strong-scaling at larger process counts since
-  communication overhead typically increases with the number of
-  processes used.
+> ## Testing Code Performance on SLURM
+> 
+> We also need a way to test our code on our HPC infrastructure of choice.
+> This will likely vary from system to system depending on your infrastructure configuration,
+> but for the COSMA site on DiRAC this may look something like (replacing the `<account>`, `<queue>`,
+> `<directory_containing_poisson_executable>` accordingly):
+> 
+> ~~~
+> #!/usr/bin/env bash
+> #SBATCH --account=<account>
+> #SBATCH --partition=<queue>
+> #SBATCH --job-name=mpi-poisson
+> #SBATCH --time=00:05:00
+> #SBATCH --nodes=1
+> #SBATCH --ntasks=1
+> #SBATCH --mem=4M
+> #SBATCH --chdir=<directory_containing_poisson_executable>
+>
+> module unload gnu_comp
+> module load gnu_comp/11.1.0
+> module load openmpi/4.1.4
+> 
+> time mpirun -n 1 poisson_mpi
+> ~~~
+> {: .language-bash}
+> 
+> So here, after loading the required compiler and OpenMPI modules,
+> we use the `time` command to output how long the process took to run for a given number of processors.
+> and ensure we specify `ntasks` correctly as the required number of cores we wish to use.
+> 
+> We can then submit this using `sbatch`, e.g. `sbatch poisson-mpi.sh`,
+> with the output captured by default in a `slurm-....out` file
+> which will include the time taken to run the program.
+{: .callout}
+
+> ## Strong Scaling - How Does our Code Perform?
+>
+> Strong scaling means increasing the number of ranks without
+> changing the problem size.
+> An algorithm with good strong scaling behaviour allows you to
+> solve a problem more quickly by making use of more cores.
+>
+> In `poisson_mpi.c`, ensure `MAX_ITERATIONS` is set to `25000` and `GRIDSIZE` is `512`.
+>
+> Try submitting your program with an increasing number of ranks as we discussed earlier.
+> What are the limitations on scaling?
+>
+>> ## Solution
+>>
+>> Exact numbers depend on the machine you're running on,
+>> but with a small number of ranks (up to 4) you should
+>> see the time decrease with the number of ranks.
+>> At around 5 ranks the result is a bit worse and doubling again to 16 has little effect.
+>>
+>> The figure below shows an example of the scaling with
+>> `GRIDSIZE=512` and `GRIDSIZE=2048`.
+>>
+>> <img src="fig/poisson_scaling_plot.png" alt="Figure showing the result described above for GRIDSIZE=512 and GRIDSIZE=2048"/>
+>>
+>> In the example, which runs on a machine with two 20-core Intel Xeon Scalable CPUs,
+>> using 32 ranks actually takes more time.
+>> The 32 ranks don't fit on one CPU and communicating between
+>> the the two CPUs takes more time, even though they are in the same machine.
+>>
+>> The communication could be made more efficient.
+>> We could use non-blocking communication and do some of the computation
+>> while communication is happening.
+>>
+>{: .solution}
+>
+{: .challenge}
+
+### Gustafson's Law and Weak Scaling
 
 In practice the sizes of problems scale with the amount of
-available resources, and we also need a measure for a relative speedup
+available resources, and so we also need a measure for a relative speedup
 which takes into account increasing problem sizes.
-
-### Gustafson's law and weak scaling
 
 Gustafson’s law is based on the approximations that the parallel part
 scales linearly with the amount of resources, and that the serial part
@@ -97,15 +189,53 @@ where the scaled speedup is calculated based on the amount of work
 done for a scaled problem size (in contrast to Amdahl’s law which
 focuses on fixed problem size).
 
-<img src="fig/scaling_gustafson.png" alt="A figure showing weak scaling"/>
+![A figure showing weak scaling](fig/scaling_gustafson.png)
 
 **Weak scaling** is defined as how the solution time varies with the number of processors
 for a *fixed problem size per processor*. If the run time stays constant while the workload
 is increased in direct proportion to the number of processors, then the solution is said
 to exhibit *linear weak scaling*.
 
+> ## Weak Scaling - How Does our Code Perform?
+>
+> Weak scaling refers to increasing the size of the problem
+> while increasing the number of ranks.
+> This is much easier than strong scaling and there are several
+> algorithms with good weak scaling.
+> In fact our algorithm for integrating the Poisson equation
+> might well have perfect weak scaling.
+>
+> Good weak scaling allows you to solve much larger problems
+> using HPC systems.
+>
+> Run the Poisson solver with an increasing number of ranks,
+> setting `GRIDSIZE` to `(n_ranks+1) * 128` each time.
+> Remember you'll need to recompile the code each time before submitting it.
+> How does it behave?
+>
+>> ## Solution
+>>
+>> Depending on the machine you're running on, the
+>> runtime should be relatively constant.
+>> Runtime will increase if you need to use nodes that are
+>> further away from each other in the network.
+>>
+>> The figure below shows an example of the scaling with
+>> `GRIDSIZE=128*n_ranks`.
+>>
+>> <img src="fig/poisson_scaling_plot_weak.png" alt="Figure showing a slowly increasing amount of time as a function of n_ranks"/>
+>>
+>> In this case all the ranks are running on the same node with
+>> 40 cores. The increase in runtime is probably due to the
+>> memory bandwidth of the node being used by a larger number of
+>> cores.
+>>
+>{: .solution}
+{: .challenge}
 
-## Communication Speed and Latency
+## Other Factors Affecting Performance
+
+### Communication Speed and Latency
 
 The other significant factors in the speed of a parallel program are
 communication speed and latency.
@@ -123,7 +253,7 @@ parallel regions gets faster with the number of ranks.  But if we keep
 increasing the number of ranks, the time spent in communication grows
 when multiple cores are involved with communication.
 
-## Surface-to-Volume Ratio
+### Surface-to-Volume Ratio
 
 In a parallel algorithm, the data which is handled by a core
 can be considered in two parts: the part the CPU needs that other cores
@@ -144,111 +274,19 @@ surface data exchanged in multiple communications. Of course,
 sequential consistency should be obeyed when the surface data is
 exchanged.
 
-
-## How Does our Code Scale?
-
-FIXME: back reference to last episode (and serial and parallel regions bit) as a lead-in
-
-Try it with a different numbers of ranks, up to
-the maximum number you expect to use.
-
-It's also good to check the speed with just one rank.
-In most cases it can be made as fast as a serial code
-using the same algorithm.
-
-FIXME: adapt next paragraph to discuss testing in general
-
-When making changes to improve performance, keep running the test suite.
-There is no reason to write a program that is fast but produces wrong
-results.
-
-> ## Strong Scaling
->
-> Strong scaling means increasing the number of ranks without
-> changing the problem.
-> An algorithm with good strong scaling behaviour allows you to
-> solve a problem more and more quickly by throwing more cores
-> at it.
-> There are no real problems where you can achieve perfect strong scaling
-> but some do get close.
->
-> Modify the main function to call the `poisson_step` 100 times and set `GRIDSIZE=512`.
->
-> Try running your program with an increasing number of ranks.
-> Measure the time taken using the Unix `time` utility.
-> What are the limitations on scaling?
->
->> ## Solution
->>
->> Exact numbers depend on the machine you're running on,
->> but with a small number of ranks (up to 4) you should
->> see the time decrease with the number of ranks.
->> At 8 ranks the result is a bit worse and doubling again to 16 has little effect.
->>
->> The figure below shows an example of the scaling with
->> `GRIDSIZE=512` and `GRIDSIZE=2048`.
->>
->> <img src="fig/poisson_scaling_plot.png" alt="Figure showing the result described above for GRIDSIZE=512 and GRIDSIZE=2048"/>
->>
->> In the example, which runs on a machine with two 20-core Intel Xeon Scalable CPUs,
->> using 32 ranks actually takes more time.
->> The 32 ranks don't fit on one CPU and communicating between
->> the the two CPUs takes more time, even though they are in the same machine.
->>
->> The communication could be made more efficient.
->> We could use non-blocking communication and do some of the computation
->> while communication is happening.
->>
->{: .solution}
->
-{: .challenge}
-
-> ## Weak Scaling
->
-> Weak scaling refers to increasing the size of the problem
-> while increasing the number of ranks.
-> This is much easier than strong scaling and there are several
-> algorithms with good weak scaling.
-> In fact our algorithm for integrating the Poisson equation
-> might well have perfect weak scaling.
->
-> Good weak scaling allows you to solve much larger problems
-> using HPC systems.
->
-> Run the Poisson solver with and increasing number of ranks,
-> increasing `GRIDSIZE` only in the `j` direction with the number
-> of ranks.
-> How does it behave?
->
->> ## Solution
->>
->> Depending on the machine you're running on, the
->> runtime should be relatively constant.
->> Runtime will increase if you need to use nodes that are
->> further away from each other in the network.
->>
->> The figure below shows an example of the scaling with
->> `GRIDSIZE=128*n_ranks`.
->> This is quickly implemented by settings `my_j_max` to `128`.
->>
->> <img src="fig/poisson_scaling_plot_weak.png" alt="Figure showing a slowly increasing amount of time as a function of n_ranks"/>
->>
->> In this case all the ranks are running on the same node with
->> 40 cores. The increase in runtime is probably due to the
->> memory bandwidth of the node being used by a larger number of
->> cores.
->>
->{: .solution}
-{: .challenge}
-
 ## Profiling our Code
+
+Now we have a better understanding of how our code scales with resources and problem size,
+we may want to consider how to optimise the code to perform better.
+But we should be careful!
 
 > "We should forget about small efficiencies, say about 97% of the time:
 > premature optimization is the root of all evil." -- Donald Knuth
 
 Essentially, before attempting to optimize your own code, you should profile it.
-Typically, most of the runtime is spent in a few functions/subroutines, so you should focus your optimization efforts
-on those parts of the code. The good news is that there are helpful tools known as *profilers* that can help us.
+Typically, most of the runtime is spent in a few functions/subroutines,
+so you should focus your optimization efforts on those parts of the code.
+The good news is that there are helpful tools known as *profilers* that can help us.
 
 Profilers help you find out where a program is spending its time
 and pinpoint places where optimising it makes sense. Many different
@@ -278,92 +316,85 @@ supports a wide range of parallel architectures and models, including
 MPI, UPC, CUDA and OpenMP.
 
 Version 19 and higher of ARM Forge supports Python, in addition to
-Fortran and C/C++. PDC has a license for ARM MAP and ARM DDT and the
-most recent versions are installed, but the installed versions of
-Performance Reports only support Fortran and C/C++. To see which
-versions are available, type:
+Fortran and C/C++. To see which versions are available, type:
 
 ~~~
-$ module avail allinea
+module avail allinea
 ~~~
 {: .source .language-bash}
 
-
-### Further Information
-
-For more information on ARM Forge check the [product website](https://www.arm.com/products/development-tools/server-and-hpc/forge). Instructions for how to use ARM Forge at
-PDC can be found [on the support pages](https://www.pdc.kth.se/software/software/allinea-forge/index_general.html).
+For more information on ARM Forge see the [product website](https://www.arm.com/products/development-tools/server-and-hpc/forge).
 
 ## Performance Reports
 
-FIXME: adapt section for DiRAC
-
-It is advisable to create a short version of your program, limiting the
+Ordinarily when profiling our code using such a tool,
+it is advisable to create a short version of your program, limiting the
 runtime to a few seconds or minutes.
-You may be able to reduce the problem size or required precision,
-as long as this does not change the algorithm itself.
+Fortunately that's something we can readily configure with our `poisson_mpi.c` code.
+For now, set `MAX_ITERATIONS` to `25000` and `GRIDSIZE` to `512`.
 
-We will use the Poisson solver from the previous lesson as an example.
-The example program used here (and at the end of the previous section)
-is
-[here](../code/poisson/poisson_profiling.c){: .show-c}
-[here](../code/poisson/poisson_profiling.F08){: .show-fortran}.
+We first load the module for Performance Reports.
+How you do this will vary site-to-site, but for COSMA on DiRAC we can do:
 
-We first load the module for Performance Reports:
 ~~~
-module load allinea-reports/18.1.1
+module load armforge/23.1.0
+module load allinea/ddt/18.1.2
 ~~~
-{: .source .language-bash}
-
-Assuming the final version is saved into `poisson.c` it is compiled with:
-{: .show-c}
-~~~
-mpicc -o poisson poisson.c
-~~~
-{: .source .language-bash .show-c}
-
-Assuming the final version is saved into `poisson.F08` it is compiled with:
-{: .show-fortran}
-~~~
-mpifort -o poisson poisson.F08
-~~~
-{: .source .language-bash .show-fortran}
+{: .language-bash}
 
 Next, we run the executable using Performance Reports
-to analyse the program execution:
-~~~
-perf-report mpirun -n 16 poisson
-~~~
-{: .source .language-bash}
+to analyse the program execution.
+Create a new version of our SLURM submission script we used before,
+which includes the following at the bottom of the script instead:
 
-This creates two files, one .txt file which can be viewed in the
-terminal and one .html file which can be opened in a browser.
 ~~~
-cat poisson_16p_1n_2019-11-26_09-37.txt
+module load armforge/23.1.0
+module load allinea/ddt/18.1.2
+
+module unload gnu_comp
+module load gnu_comp/11.1.0
+module load openmpi/4.1.4
+
+perf-report mpirun -n 4 poisson_mpi
 ~~~
-{: .source .language-bash}
+{: .language-bash}
+
+And then submit it, e.g. `sbatch perf-poisson-mpi.sh`.
+
+This creates two files, one `.txt` file which can be viewed in the
+terminal and one `.html` file which can be opened in a browser
+(you will need to `scp` the HTML file to your local machine to view it).
+
 ~~~
-Command:        mpirun -n 16 ./poisson
-Resources:      1 node (24 physical, 48 logical cores per node)
-Tasks:          16 processes
-Machine:        tegner-login-1.pdc.kth.se
-Start time:     Tue Nov 26 2019 09:37:22 (UTC+01)
+cat poisson_mpi_4p_1n_2024-01-30_15-38.txt
+~~~
+{: .language-bash}
+
+~~~
+Command:        mpirun -n 4 poisson_mpi
+Resources:      1 node (28 physical, 56 logical cores per node)
+Memory:         503 GiB per node
+Tasks:          4 processes
+Machine:        <specific_node_displayed_here>
+Architecture:   x86_64
+CPU Family:     skylake-x
+Start time:     Tue Jan 30 15:38:06 2024
 Total time:     1 second
-Full path:      /cfs/klemming/nobackup/k/kthw/introduction-to-mpi
+Full path:      <run_directory_displayed_here>
 
-Summary: poisson is MPI-bound in this configuration
-Compute:                                     35.0% |===|
-MPI:                                         65.0% |======|
-I/O:                                          0.0% |
-This application run was MPI-bound. A breakdown of this time and advice for investigating further is in the MPI section below.
+Summary: poisson_mpi is MPI-bound in this configuration
+Compute:                                      6.6%     (0.0s) ||
+MPI:                                         93.4%     (0.2s) |========|
+I/O:                                          0.0%     (0.0s) |
+This application run was MPI-bound (based on main thread activity). A breakdown of this time and advice for investigating further is in the MPI section below.
 
 ...
 ~~~
 {: .output}
 
-The graphical output looks like this:
+The graphical HTML output looks like this:
 
-<img src="fig/perf_reports.png" alt="A picture of the perf-report"/>
+![A picture of the perf-report](fig/perf_reports.png)
 
 The output shows that when run in this way, the application is
 MPI bound, i.e. most time is spent in MPI communication. This
@@ -372,7 +403,7 @@ given number of processes. Either the number of processes should
 be decreased, or the problem size increased so that more time is
 spent in the actual compute sections of the code.
 
->## Profile Your Poisson Code
+> ## Profile Your Poisson Code
 >
 > Compile, run and analyse your own MPI version of the poisson code.
 > 
@@ -380,8 +411,8 @@ spent in the actual compute sections of the code.
 > Try reducing the number of processes used, rerun and investigate the profile.
 > Is it still MPI-bound? 
 > 
-> Increase the problem size, recompile, rerun and investigate the profile. What has
-> changed now?
+> Increase the problem size, recompile, rerun and investigate the profile.
+> What has changed now?
 {: .challenge}
 
 > ## Iterative Improvement
@@ -391,68 +422,17 @@ spent in the actual compute sections of the code.
 >
 {: .challenge}
 
-### ARM MAP
-
-After getting a general overview of the performance through
-ARM Performance Reports, one can start digging deeper using
-a full-fledged profiler like ARM MAP. We will not go into
-any details on using MAP, but instead just
-show how MAP can be used.
-
-#### Installing the Remote Client
-
-First, it's useful to install the [ARM Forge Remote Client](https://developer.arm.com/tools-and-software/server-and-hpc/arm-architecture-tools/downloads/download-arm-forge), as this avoids running the GUI over a possibly slow or
-unstable ssh connection.
-The remote client runs on your local computer and can be used to connect to
-running processes on the cluster.
-
-After downloading an installer for your operating system (link above),
-you need to set up the connection to PDC:
-
-- Click "Remote Launch", and select "Configure"
-- Click "Add", and for "hostname" write: <username>@tegner.pdc.kth.se.
-  You can also give an optional Connection name.
-- For "Remote installation directory", enter
-  `/pdc/vol/allinea-forge/19.1.3/amd64_co7/`
-- Click on "Test Remote Launch" to see if the Remote Client GUI
-  can successfully connect to Tegner.
-
-If connecting fails, you may need to replace the default ssh used by
-Remote Client. First create the directory `~/.allinea`. In this
-directory create a file called `remote-exec`. In this file, write
-~~~
-#!/bin/sh /correct/path/to/ssh [correct flags] $*
-~~~
-{: .source .language-bash}
-
-Note that:
-- If you are on OSX with an ssh installed via MacPorts, the correct ssh would be `/opt/local/bin/ssh`.
-- If you have not configured your `~/.ssh/config` file,
-you will need to add the flags `GSSAPIDelegateCredentials=yes -o GSSAPIKeyExchange=yes -o GSSAPIAuthentication=yes`
-
-
-> ## Profiling with MAP
+> ## A General Optimisation Workflow?
 >
-> First install and configure the ARM Forge Client according
-> to the instructions above. Then, open the Remote Client and click `ARM MAP`
-> from the left panel, and click `Profile` in the main panel. 
-> 
-> In the window that pops up, select which Application you want to profile
-> and the number of MPI ranks. Tick "Submit to Queue", and click "Configure"
-> and make sure that the fields look correct. Under "Metrics", disable
-> Energy, I/O, Lustre.
-> 
-> Now click "Submit", and see how a job is launched.
-{: .challenge}
-
-## A General Optimisation Workflow
-
-A general workflow for optimising a code, whether parallel or serial, is as follows:
-
-1. Profile
-2. Optimise
-3. Test correctness
-4. Measure efficiency
-
-Then we can repeat this process as needed. But note that eventually this process will yield diminishing returns, 
-and over-optimisation is a trap to avoid - hence the importance of continuing to measure efficiency as you progress.
+> A general workflow for optimising a code, whether parallel or serial, is as follows:
+>
+> 1. Profile
+> 2. Optimise
+> 3. Test correctness
+> 4. Measure efficiency
+>
+> Then we can repeat this process as needed.
+> But note that eventually this process will yield diminishing returns,
+> and over-optimisation is a trap to avoid -
+> hence the importance of continuing to measure efficiency as you progress.
+{: .callout}
