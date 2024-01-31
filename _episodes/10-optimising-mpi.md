@@ -7,10 +7,16 @@ exercises: 0
 questions:
 - How can we understand how well our code performs as resources increase?
 objectives:
-- Understand and differentiate between strong and weak scaling
-- Understand when and how to profile/optimise an MPI application
+- Describe and differentiate between strong and weak scaling
+- Test the strong and weak sacling performance of our MPI code
+- Use a profiler to identify performance characteristics of our MPI application
 keypoints:
--
+- We can use Amdahl's Law to identify the theoretical limit in what parallelisation can achieve for performance
+- Strong scaling is defined as how the solution time varies with the number of processors for a fixed total problem size
+- We can use Gustafson's Law to calculate relative speedup which takes into account increasing problem sizes
+- Weak scaling is defined as how the solution time varies with the number of processors for a fixed problem size per processor
+- Use a profiler to profile code to understand its performance issues before optimising it
+- Ensure code is tested after optimisation to ensure its functional behaviour is still correct
 ---
 
 Now we have parallelised our code, we should determine how well it performs.
@@ -296,8 +302,6 @@ types of profiling tools exist, but for MPI application we need
 Some examples of parallel profilers are:
 - [Scalasca](http://scalasca.org) - a free and open source parallel
   profiler developed by three German research centers.
-- [CrayPat](https://pubs.cray.com/content/S-2376/7.0.0/cray-performance-measurement-and-analysis-tools-user-guide/craypat) - performance analysis tool
-  offered by Cray for the XC platform.
 - [TAU](https://www.cs.uoregon.edu/research/tau/home.php)
 - [VAMPIR](https://vampir.eu/)
 - [Paraver](https://tools.bsc.es/paraver)
