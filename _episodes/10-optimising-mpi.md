@@ -8,7 +8,7 @@ questions:
 - How can we understand how well our code performs as resources increase?
 objectives:
 - Describe and differentiate between strong and weak scaling
-- Test the strong and weak sacling performance of our MPI code
+- Test the strong and weak scaling performance of our MPI code
 - Use a profiler to identify performance characteristics of our MPI application
 keypoints:
 - We can use Amdahl's Law to identify the theoretical limit in what parallelisation can achieve for performance
