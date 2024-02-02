@@ -353,66 +353,37 @@ int main(int argc, char** argv) {
 >{: .solution}
 {: .challenge}
 
-TODO: consider switching exercise below to using Ed's example blocking code (in Google Drive) which is simpler
-
 > ## Blocking
 >
 > Try the code below and see what happens. How would you change the code to fix the problem? 
 > 
 > _Note: If you are using the MPICH library, this example might automagically work. With OpenMPI it shouldn't!)_
 >
->~~~
-> #include <stdio.h>
-> #include <stdlib.h>
+> ~~~
 > #include <mpi.h>
->
-> int main(int argc, char** argv) {
->     int rank, n_ranks, neighbour;
->     int n_numbers = 10000;
->     int *send_message;
->     int *recv_message;
->     MPI_Status status;
->
->     send_message = malloc(n_numbers*sizeof(int));
->     recv_message = malloc(n_numbers*sizeof(int));
->
->     // First call MPI_Init
+> 
+> #define ARRAY_SIZE 3
+> 
+> int main(int argc, char **argv) {
 >     MPI_Init(&argc, &argv);
->
->     // Get my rank and the number of ranks
+> 
+>     int rank;
 >     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
->     MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
->
->     // Check that there are exactly two ranks
->     if( n_ranks != 2 ){
->         printf("This example requires exactly two ranks\n");
->         MPI_Finalize();
->         return(1);
->     }
->
->    // Call the other rank the neighbour
->     if( rank == 0 ) {
->         neighbour = 1;      
+> 
+>     const int comm_tag = 1;
+>     int numbers[ARRAY_SIZE] = {1, 2, 3};
+>     MPI_Status recv_status;
+> 
+>     if (rank == 0) {
+>         /* synchronous send: returns when the destination has started to
+>            receive the message */
+>         MPI_Ssend(&numbers, ARRAY_SIZE, MPI_INT, 1, comm_tag, MPI_COMM_WORLD);
+>         MPI_Recv(&numbers, ARRAY_SIZE, MPI_INT, 1, comm_tag, MPI_COMM_WORLD, &recv_status);
 >     } else {
->         neighbour = 0;
+>         MPI_Ssend(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD);
+>         MPI_Recv(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD, &recv_status);
 >     }
->
->     // Generate numbers to send
->     for( int i=0; i<n_numbers; i++) {
->         send_message[i] = i;
->     }
->
->     // Send the message to other rank
->     MPI_Send(send_message, n_numbers, MPI_INT, neighbour, 0, MPI_COMM_WORLD);
->
->     // Receive the message from the other rank
->     MPI_Recv(recv_message, n_numbers, MPI_INT, neighbour, 0, MPI_COMM_WORLD, &status);
->     printf("Message received by rank %d \n", rank);
->
->     free(send_message);
->     free(recv_message);
->
->     // Call finalize at the end
+> 
 >     return MPI_Finalize();
 > }
 > ~~~
@@ -430,54 +401,13 @@ TODO: consider switching exercise below to using Ed's example blocking code (in 
 >> This generally happens only for short messages.
 >> Even when this happens, the actual transfer will not start before the receive is posted.
 >>
+>> For this example, let's have rank 0 send first, and rank 1 receive first.
+>> So all we need to do to fix this is to swap the send and receive in the case of rank 1
+>> (after the `else`):
+>>
 >> ~~~
->> #include <stdio.h>
->> #include <mpi.h>
->>
->> int main(int argc, char** argv) {
->>     int rank, n_ranks, neighbour;
->>     int n_numbers = 524288;
->>     int send_message[n_numbers];
->>     int recv_message[n_numbers];
->>     MPI_Status status;
->>
->>     // First call MPI_Init
->>     MPI_Init(&argc, &argv);
->>
->>     // Get my rank and the number of ranks
->>     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
->>     MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
->>
->>     // Generate numbers to send
->>     for( int i=0; i<n_numbers; i++){
->>         send_message[i] = i;
->>     }
->>
->>     if( rank == 0 ) {
->>         // Rank 0 will send first
->>         MPI_Send(send_message, n_numbers, MPI_INT, 1, 0, MPI_COMM_WORLD);
->>     }
->>
->>     if( rank == 1 ) {
->>         // Rank 1 will receive it's message before sending
->>         MPI_Recv(recv_message, n_numbers, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
->>         printf("Message received by rank %d \n", rank);
->>     }
->>
->>     if( rank == 1 ) {
->>         // Now rank 1 is free to send
->>         MPI_Send(send_message, n_numbers, MPI_INT, 0, 0, MPI_COMM_WORLD);
->>     }
->>
->>     if( rank == 0 ) {
->>         // And rank 0 will receive the message
->>         MPI_Recv(recv_message, n_numbers, MPI_INT, 1, 0, MPI_COMM_WORLD, &status);
->>         printf("Message received by rank %d \n", rank);
->>     }
->>
->>     // Call finalize at the end
->>     return MPI_Finalize();
->> }
+>>         MPI_Recv(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD, &recv_status);
+>>         MPI_Ssend(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD);
 >> ~~~
 >>{: .language-c}
 >{: .solution}
