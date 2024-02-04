@@ -441,6 +441,15 @@ decompose the domain so that many cores can work in parallel.
 >
 >> ## Solution
 >>
+>> 
+>> First Loop: Each iteration depends on the results of the previous two iterations in vector_1. So it is not parallelisable within itself.
+>>
+>> Second Loop: Each iteration is independent and can be parallelised.
+>>
+>> Third loop: Each iteration is independent within itself. While there are dependencies on vector_2[i] and vector_1[i], these dependencies are local to each iteration. This independence 
+>> allows for the potential parallelization of the third loop by overlapping its execution with the second loop, assuming the results of the first loop are available or can be made 
+>> available dynamically.
+>>
 >> ~~~
 >> serial   | vector_0[0] = 1;
 >>          | vector_1[1] = 1;
@@ -454,13 +463,9 @@ decompose the domain so that many cores can work in parallel.
 >>          |   vector_3[i] = vector_2[i] + vector_1[i];
 >>          |   print("The sum of the vectors is.", vector_3[i]);
 >>
->> The first and the second loop could also run at the same time.
 >> ~~~
 >> {: .source}
->>
->> In the first loop, every iteration depends on data from the previous two.
->> In the second two loops, nothing in a step depends on any of the other steps,
->> and therefore can be parallelised.
+>> The first and the second loop could also run at the same time.
 >{: .solution}
 >
 {: .challenge}

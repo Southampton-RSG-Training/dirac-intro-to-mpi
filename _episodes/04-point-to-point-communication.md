@@ -1,8 +1,8 @@
 ---
 title: Point-to-Point Communication
 slug: "dirac-intro-to-mpi-point-to-point-communication"
-teaching: 0
-exercises: 0
+teaching: 10
+exercises: 10
 questions:
 - How do I send data between processes?
 objectives:
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
 ~~~
 {: .language-c}
 
-> ## MPI Types in C
+> ## MPI Data Types in C
 >
 > In the above example we send a string of characters and
 > therefore specify the type `MPI_CHAR`{: .show-c}.
