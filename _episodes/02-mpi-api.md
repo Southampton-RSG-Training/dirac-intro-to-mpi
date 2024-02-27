@@ -210,7 +210,7 @@ Here's a more complete example:
 #include <stdio.h>
 #include <mpi.h>
 
-int main(int argc, char** argv) {
+int main() {
     int num_ranks, my_rank;
 
     // First call MPI_Init
@@ -244,16 +244,15 @@ int main(int argc, char** argv) {
 > > You should see something like (although the ordering may be different):
 > >
 > > ~~~
-> > My rank number is 1
-> > My rank number is 2
-> > My rank number is 0
-> > My rank number is 3
+> > My rank number is 1 out of 4
+> > My rank number is 2 out of 4
+> > My rank number is 3 out of 4 
+> > My rank number is 0 out of 4
 > > ~~~
-> >
+> >  {: .output}
 > > The reason why the results are not returned in order is because the order in which the processes run
 > > is arbitrary. As we'll see later, there are ways to synchronise processes to obtain a desired ordering!
-> >
-> > {: .output}
+>>
 > {: .solution}
 {: .challenge}
 
@@ -370,7 +369,7 @@ Let’s create a slurm submission script called `count_primes.sh`. Open an edito
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
 #SBATCH --time=00:01:00
-#SBATCH --job-name=count-primes
+#SBATCH --job-name=count_primes
 
 module load gnu_comp/13.1.0
 module load openmpi/4.1.4
@@ -382,7 +381,7 @@ mpiexec -n 4 ./count_primes
 We can now submit the job using the `sbatch` command and monitor its status with `squeue`:
 
 ~~~
-sbatch count-primes.sh
+sbatch count_primes.sh
 squeue -u yourUsername
 ~~~
 {: .language-bash}
