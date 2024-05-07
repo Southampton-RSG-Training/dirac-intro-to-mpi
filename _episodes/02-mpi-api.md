@@ -81,9 +81,18 @@ First check the available MPI implementations/modules on the cluster using the c
 This will display a list of available modules, including MPI implementations.
 As for the next step, you should choose the appropriate MPI implementation/module from the 
 list based on your requirements and load it using `module load <mpi_module_name>`. For 
-example, if you want to load OpenMPI version 4.0.5, you can use:
+example, if you want to load OpenMPI version 4.1.4, you can use (for example on COSMA):
+
 ~~~
-module load openmpi/4.0.5
+module load openmpi/4.1.4
+~~~
+{: .language-bash}
+
+You may also need to load a compiler depending on your environment, and may get a warning
+as such. On COSMA for example, you need to do something like this beforehand:
+
+~~~
+module load gnu_comp/13.1.0
 ~~~
 {: .language-bash}
 
