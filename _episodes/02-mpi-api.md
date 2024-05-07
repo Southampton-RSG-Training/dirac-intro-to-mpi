@@ -210,7 +210,7 @@ Here's a more complete example:
 #include <stdio.h>
 #include <mpi.h>
 
-int main() {
+int main(int argc, char *argv[]) {
     int num_ranks, my_rank;
 
     // First call MPI_Init
