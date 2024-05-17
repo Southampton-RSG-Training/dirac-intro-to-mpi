@@ -32,7 +32,7 @@ In the simulation the stick is split into a given number of slices, each with it
 The temperature of the stick itself across each slice is initially set to zero, whilst at one boundary of the stick the amount of heat is set to 10.
 The code applies steps that simulates heat transfer along it, bringing each slice of the stick closer to a solution until it reaches a desired equilibrium in temperature along the whole stick.
 
-Let's download the code, which can be found [here](/code/examples/poisson/poisson.c), and take a look at it now.
+Let's download the code, which can be found [here](code/examples/poisson/poisson.c), and take a look at it now.
 
 ### At a High Level - main()
 
