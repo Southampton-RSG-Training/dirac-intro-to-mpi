@@ -177,7 +177,7 @@ int main(int argc, char** argv) {
 >
 > In the above example we send a string of characters and
 > therefore specify the type `MPI_CHAR`{: .show-c}.
-> For a complete list of possibly types, see the [reference]({{ page.root }}{% link reference.md %}).
+> For a complete list of types, see [the MPICH documentation](https://www.mpich.org/static/docs/v3.3/www3/Constants.html).
 >
 {: .callout}
 
