@@ -866,7 +866,7 @@ for (int i = 0; i < num_rows; ++i) {
 > Since the arrays are dynamically allocated, in rank 0, you should also pack the number of elements in each array. Rank
 > 1 may also not know the size of the buffer. How would you deal with that?
 >
-> You can use this [skeleton code](code/solutions/08-pack-skeleton.c) to begin with.
+> You can use this [skeleton code](code/solutions/07-pack-skeleton.c) to begin with.
 >
 > > ## Solution
 > >
