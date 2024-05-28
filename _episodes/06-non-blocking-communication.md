@@ -275,7 +275,7 @@ simulate_something(important_data);
 > >     MPI_Irecv(numbers, 8, MPI_INT, 0, 0, MPI_COMM_WORLD, &recv_req);
 > > }
 > >
-> > MPI_Wait(&send_req, &status);  /* Wait for both requests in one call */
+> > MPI_Wait(&send_req, &status);
 > > MPI_Wait(&recv_req, &status);  /* Wait for both requests in one call */
 > > ```
 > >
