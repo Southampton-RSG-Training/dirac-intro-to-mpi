@@ -44,7 +44,7 @@ add up into a noticeable performance hit.
 > collective communication functions are designed to do. This is an inefficient way to share data. The collective
 > routines in MPI have multiple tricks and optimizations up their sleeves, resulting in communication overheads much
 > lower than the equivalent point-to-point approach. One other advantage is that collective communication often requires
-> less code to achieve the same thing, which is always a win. It is there almost always better to use collective
+> less code to achieve the same thing, which is always a win. It is almost always better to use collective
 > operations where you can.
 >
 {: .callout}
