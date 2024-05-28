@@ -380,7 +380,7 @@ if (!comm_completed) {
 >
 > <img src="fig/rank_chain.png" alt="A chain of ranks" height="100">
 >
-> For for following skeleton below, use non-blocking communication to send `send_message` to the right right and
+> For following skeleton below, use non-blocking communication to send `send_message` to the right right and
 > receive a message from the left rank. Create two programs, one using `MPI_Wait()` and the other using `MPI_Test()`.
 >
 > ```c
