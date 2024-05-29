@@ -373,7 +373,7 @@ Let’s create a slurm submission script called `count_primes.sh`. Open an edito
 (or copy/paste) the following contents:
 
 ~~~
-##!/usr/bin/env bash
+#!/usr/bin/env bash
 #SBATCH --account=yourProjectCode
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
