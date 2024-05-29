@@ -399,7 +399,7 @@ if (!comm_completed) {
 >
 >     if (num_ranks < 2) {
 >         printf("This example requires at least two ranks\n");
->         MPI_Abort(1);
+>         MPI_Abort(MPI_COMM_WORLD, 1);
 >     }
 >
 >     char send_message[MESSAGE_SIZE];
