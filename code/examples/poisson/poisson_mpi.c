@@ -133,7 +133,8 @@ int main(int argc, char** argv) {
   }
 
   // Gather results from all ranks
-  // We need to send data starting from the second element of u, since u[0] is a boundary  resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
+  // We need to send data starting from the second element of u, since u[0] is a boundary
+  resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
   MPI_Gather(&u[1], rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
 
   if (rank == 0) {

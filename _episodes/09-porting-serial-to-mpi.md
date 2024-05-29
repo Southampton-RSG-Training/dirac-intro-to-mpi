@@ -163,7 +163,7 @@ And finally, the state of the stick is set to the newly calculated values, and `
 You may compile and run the code as follows:
 
 ~~~
-gcc poisson.c -o poisson
+gcc poisson.c -o poisson -lm
 ./poisson
 ~~~
 {: .language-bash}
@@ -497,10 +497,10 @@ Once complete across all ranks, every rank will then have the slice boundary dat
 
 ### Running our Parallel Code
 
-Now we have the parallelised code in place, we can compile and run it, e.g.:
+You can obtain a full version of the parallelised Poisson code from [here](code/examples/poisson/poisson_mpi.c). Now we have the parallelised code in place, we can compile and run it, e.g.:
 
 ~~~
-mpicc poisson_mpi.c -o poisson_mpi
+mpicc poisson_mpi.c -o poisson_mpi -lm
 mpirun -n 2 poisson_mpi
 ~~~
 {: .language-bash}

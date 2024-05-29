@@ -68,7 +68,7 @@ double *rank_matrix_result = malloc(rows_per_rank * num_cols_b * sizeof(double))
 
 /* Scatter matrix_a across ranks into rank_matrix_a. Each rank will compute a subset of
    the result for the rows in rank_matrix_a */
-MPI_Scatter(matrix_a, rows_per_ranks * num_cols_a, MPI_DOUBLE, rank_matrix_a, rows_per_ranks * num_cols_a,
+MPI_Scatter(matrix_a, rows_per_rank * num_cols_a, MPI_DOUBLE, rank_matrix_a, rows_per_rank * num_cols_a,
             MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
 
 /* Broadcast matrix_b to all ranks, because matrix_b was only created on the root rank

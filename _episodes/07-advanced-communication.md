@@ -216,8 +216,8 @@ MPI_Type_vector(count, blocklength, stride, MPI_INT, &rows_type);
 /* Don't forget to commit it */
 MPI_Type_commit(&rows_type);
 
-/* Send the middle row of our 2d send_buffer array. Note that we are sending
-   &send_buffer[1][0] and not send_buffer. This is because we are using an offset
+/* Send the middle row of our 2d matrix array. Note that we are sending
+   &matrix[1][0] and not matrix. This is because we are using an offset
    to change the starting point of where we begin sending memory */
 int matrix[4][4] = {
    { 1,  2,  3,  4},
@@ -226,13 +226,15 @@ int matrix[4][4] = {
    {13, 14, 15, 16},
 };
 
-MPI_Send(&matrix[1][0], 1, rows_type, 1, 0, MPI_COMM_WORLD);
-
-/* The receive function doesn't "work" with vector types, so we have to
-   say that we are expecting 8 integers instead */
-const int num_elements = count * blocklength;
-int recv_buffer[num_elements];
-MPI_Recv(recv_buffer, num_elements, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+if (my_rank == 0) {
+    MPI_Send(&matrix[1][0], 1, rows_type, 1, 0, MPI_COMM_WORLD);
+} else {
+    /* The receive function doesn't "work" with vector types, so we have to
+       say that we are expecting 8 integers instead */
+    const int num_elements = count * blocklength;
+    int recv_buffer[num_elements];
+    MPI_Recv(recv_buffer, num_elements, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+}
 
 /* The final thing to do is to free the new datatype when we no longer need it */
 MPI_Type_free(&rows_type);
@@ -776,38 +778,39 @@ for (int i = 0; i < num_rows; ++i) {
 
 /* Determine the upper limit for the amount of memory the buffer requires. Since
    this is a simple situation, we could probably have done this manually using
-   `num_rows * num_cols * sizeof(int)`. The size `max_buffer_size` is returned in
+   `num_rows * num_cols * sizeof(int)`. The size `pack_buffer_size` is returned in
    bytes */
-int max_buffer_size;
-MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &max_buffer_size);
+int pack_buffer_size;
+MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &pack_buffer_size);
 
-/* The buffer we are packing into has to be allocated, note that it is a
-char* array. That's because a char is 1 byte and packing and unpacking works in
-bytes */
-char *packed_data = malloc(max_buffer_size);
+if (my_rank == 0) {
+    /* Create the pack buffer and pack each row of data into it buffer
+       one by one */
+    int position = 0;
+    char *packed_data = malloc(pack_buffer_size);
+    for (int i = 0; i < num_rows; ++i) {
+        MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
+    }
 
-/* Pack each (non-contiguous) row into the packed buffer */
-int position = 0;
-for (int i = 0; i < num_rows; ++i) {
-   MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
-}
+    /* Send the packed data to rank 1 */
+    MPI_Send(packed_data, pack_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
+} else {
+    /* Create a receive buffer and get the packed buffer from rank 0 */
+    char *received_data = malloc(pack_buffer_size);
+    MPI_Recv(received_data, pack_buffer_size + 1, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-/* Send the packed data to rank 1. To send a packed array, we use the MPI_PACKED
-   datatype with the count being the size of the buffer in bytes. To send and receive
-   the packed data, we can use any of the communication functions */
-MPI_Send(packed_data, max_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
+    /* allocate a matrix to put the receive buffer into -- this is for
+       demonstration purposes */
+    int **my_matrix = malloc(num_rows * sizeof(int *));
+    for (int i = 0; i < num_cols; ++i) {
+        my_matrix[i] = malloc(num_cols * sizeof(int));
+    }
 
-/* To receive packed data, we have to allocate another buffer and receive
-   MPI_PACKED elements into it */
-char *received_data = malloc(max_buffer_size);
-MPI_Recv(received_data, max_buffer_size, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
-/* Once we have the packed buffer, we can then unpack the data into the rows
-   of my_matrix */
-int position = 0;
-int my_matrix[num_rows][num_cols];
-for (int i = 0; i < num_rows; ++i) {
-   MPI_Unpack(received_data, max_buffer_size, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
+    /* Unpack the received data row by row into my_matrix */
+    int position = 0;
+    for (int i = 0; i < num_rows; ++i) {
+        MPI_Unpack(received_data, pack_buffer_size, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
+    }
 }
 ```
 

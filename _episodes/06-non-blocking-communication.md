@@ -324,10 +324,10 @@ while (!comm_completed && work_still_to_do()) {
     MPI_Test(&request, &comm_completed, &status);
 }
 
-/* If there is no more work and the communication hasn't finished yet, then we should wait
+/* If there is no more work and the communication hasn't finished yet, then we should wait
    for it to finish */
 if (!comm_completed) {
-    MPI_Wait(&request, &status)
+    MPI_Wait(&request, &status);
 }
 ```
 
