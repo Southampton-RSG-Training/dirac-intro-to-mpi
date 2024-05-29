@@ -15,36 +15,50 @@ keypoints:
 
 The previous episode showed how to send data from one rank to another using point-to-point communication. If we wanted
 to send data from multiple ranks to a single rank to, for example, add up the value of a variable across multiple ranks,
-we have to manually loop over each rank to communicatethe data. This type of communication, where multiple ranks talk to
+we have to manually loop over each rank to communicate the data. This type of communication, where multiple ranks talk to
 one another known as called *collective communication*. In the code example below, point-to-point communication is used
-to calculate the sum of the rank numbers,
+to calculate the sum of the rank numbers - feel free to try it out!
 
 ```c
-MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
-MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+#include <stdio.h>
+#include <mpi.h>
 
-int sum;
-MPI_Status status;
+int main(int argc, char** argv) {
+    int my_rank, num_ranks;
 
-/* Rank 0 is the "root" rank, where we'll receive data and sum it up */
-if (my_rank == 0) {
-    sum = my_rank;
-    /* Start by receiving the rank number from every rank, other than itself */
-    for (int i = 1; i < num_ranks; ++i) {
-        int recv_num;
-        MPI_Recv(&recv_num, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &status);
-        sum += recv_num;  /* Increment sum */
+    // First call MPI_Init
+    MPI_Init(&argc, &argv);
+
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+
+    int sum;
+    MPI_Status status;
+
+    /* Rank 0 is the "root" rank, where we'll receive data and sum it up */
+    if (my_rank == 0) {
+        sum = my_rank;
+
+        /* Start by receiving the rank number from every rank, other than itself */
+        for (int i = 1; i < num_ranks; ++i) {
+            int recv_num;
+            MPI_Recv(&recv_num, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &status);
+            sum += recv_num;  /* Increment sum */
+        }
+        /* Now sum has been calculated, send it back to every rank other than the root */
+        for (int i = 1; i < num_ranks; ++i) {
+            MPI_Send(&sum, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
+        }
+    } else {  /* All other ranks will send their rank number and receive sum */
+        MPI_Send(&my_rank, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
+        MPI_Recv(&sum, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
     }
-    /* Now sum has been calculated, send it back to every rank other than the root */
-    for (int i = 1; i < num_ranks; ++i) {
-        MPI_Send(&sum, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
-    }
-} else {  /* All other ranks will send their rank number and receive sum */
-    MPI_Send(&my_rank, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
-    MPI_Recv(&sum, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
+
+    printf("Rank %d has a sum of %d\n", my_rank, sum);
+
+    // Call finalize at the end
+    return MPI_Finalize();
 }
-
-printf("Rank %d has a sum of %d\n", my_rank, sum);
 ```
 
 For it's use case, the code above works perfectly fine. However, it isn't very efficient when you need to communicate
@@ -429,7 +443,7 @@ MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 >
 > The following program creates an array called `vector` that contains a list
 > of `n_numbers` on each rank. The first rank contains the numbers from
-> 1 to n_numbers, the second rank from n_numbers to 2*n_numbers2 and so on.
+> 1 to n_numbers, the second rank from n_numbers to 2*n_numbers and so on.
 > It then calls the `find_max` and `find_sum` functions that should calculate the
 > sum and maximum of the vector.
 >
