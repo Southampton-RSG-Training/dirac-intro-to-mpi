@@ -355,7 +355,7 @@ int main(int argc, char** argv) {
 
 > ## Blocking
 >
-> Try the code below and see what happens. How would you change the code to fix the problem? 
+> Try the code below with two ranks and see what happens. How would you change the code to fix the problem? 
 > 
 > _Note: If you are using the MPICH library, this example might automagically work. With OpenMPI it shouldn't!)_
 >
