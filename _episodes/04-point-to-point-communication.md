@@ -112,7 +112,7 @@ int MPI_Recv(
 | `source`:       | The number of the rank sending the data |
 | `tag`:          | A message tag (integer), which must either match the tag in the sent message, or if `MPI_ANY_TAG` is specified, a message with any tag will be accepted |
 | `communicator`: | The communicator (we have used `MPI_COMM_WORLD` in earlier examples) |
-| `status`:       | A pointer for writing the exit status of the MPI command, indicating  |
+| `status`:       | A pointer for writing the exit status of the MPI command, indicating whether the operation succeeded or failed  |
 {: .show-c}
 
 Continuing our example, to receive our message we could write:
