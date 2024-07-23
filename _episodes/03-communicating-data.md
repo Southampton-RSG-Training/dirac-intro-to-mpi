@@ -31,14 +31,14 @@ of a particular data type.
 Sending and receiving data happens in one of two ways. We either want to send data from one specific rank to another,
 known as point-to-point communication, or to/from multiple ranks all at once to a single target, known as collective
 communication. In both cases, we have to *explicitly* "send" something and to *explicitly* "receive" something. We've
-emphasised *explicitly* here to make clear that data communication can't happen by itself. That is a rank can't just
-"pluck" data from one rank, because a rank doesn't automatically send and receive the data it needs. If we don't program
-in data communication, data can't be shared. None of this communication happens for free, either. With every message
-sent, there is an associated overhead which impacts the performance of your program. Often we won't notice this
-overhead, as it is quite small. But if we communicate large amounts data or too often, those small overheads can rapidly
-add up into a noticeable performance hit.
+emphasised *explicitly* here to make clear that data communication can't happen by itself. A rank can't just
+get data from one rank, and ranks don't automatically send and receive data. If we don't program
+nin data communication, data isn't shared. Unfortunately, none of this communication happens for free, either. With
+every message sent, there is an overhead which impacts the performance of your program. Often we won't notice this
+overhead, as it is usually quite small. But if we communicate large amounts data or small amounts too often, those
+ small overheads rapidly add up into a noticeable performance hit.
 
-> ## Common mistakes
+> ## A collective mistake
 >
 > A common mistake for new MPI users is to write code using point-to-point communication which emulates what the
 > collective communication functions are designed to do. This is an inefficient way to share data. The collective
@@ -51,11 +51,10 @@ add up into a noticeable performance hit.
 
 To get an idea of how communication typically happens, imagine we have two ranks: rank A and rank B. If rank A wants to
 send data to rank B (e.g., point-to-point), it must first call the appropriate MPI send function which puts that data
-into an internal *buffer*; sometimes known as the send buffer or envelope. Once the data is in the buffer, MPI figures
-out how to route the message to rank B (usually over a network) and sends it to B. To receive the data, rank B must call
-a data receiving function which will listen for any messages being sent. When the message has been successfully routed
-and the data transfer complete, rank B sends an acknowledgement back to rank A to say that the transfer has finished,
-similarly to how read receipts work in e-mails and instant messages.
+into an internal *buffer*; known as the **send buffer** or **envelope**. Once the data is in the buffer, MPI figures
+out how to route the message to rank B (usually over a network) and then sends it to B. To receive the data, rank B must
+call a data receiving function which will listen for messages being sent to it. In some cases, rank B will then send
+an acknowledgement to say that the transfer has finished, similar to read receipts in e-mails and instant messages.
 
 > ## Check your understanding
 >
@@ -74,27 +73,80 @@ similarly to how read receipts work in e-mails and instant messages.
 
 ### Communication modes
 
-There are multiple "modes" on how data is sent in MPI: standard, buffered, synchronous and ready. When an MPI
-communication function is called, control/execution of the program is passed from the calling program to the MPI
-function. Your program won't continue until MPI is happy that the communication happened successfully. The difference
-between the communication modes is the criteria of a successful communication.
+When sending data between ranks, MPI will use one of four communication modes: standard, buffered, synchronous and
+ready. When a communication function is called, it takes control of program execution until the communication has
+been deemed to finish. What finished means is that the send buffer is ready to be re-used for the next communication or
+computation, e.g. you aren't able to overwrite the data in the send buffer, which would lead to strange reslts! How and
+when this happens all depends on which communication mode you use; each mode handles this differently. MPI doesn't
+guess at which mode *should* be used, we have to program which mode to use with the associated communication functions:
 
-To use the different modes, we don't pass a special flag. Instead, MPI uses different functions to separate the
-different modes. The table below lists the four modes with a description and their associated functions (which will be
-covered in detail in the following episodes).
-
-| Mode | Description | MPI Function |
-| - | - | - |
-| Synchronous | Returns control to the program when the message has been sent and received successfully | `MPI_Ssend()` |
-| Buffered | Control is returned when the data has been copied into in the send buffer, regardless of the receive being completed or not | `MPI_Bsend()` |
-| Standard  | Either buffered or synchronous, depending on the size of the data being sent and what your specific MPI implementation chooses to use | `MPI_Send()` |
-| Ready | Will only return control if the receiving rank is already listening for a message | `MPI_Rsend()` |
+| Mode        | Function      |
+| ----------- | ------------- |
+| Synchronous | `MPI_SSend()` |
+| Buffered    | `MPI_Bsend()` |
+| Ready       | `MPI_Rsend()` |
+| Send        | `MPI_Send()`  |
 
 In contrast to the four modes for sending data, receiving data only has one mode and therefore only a single function.
 
-| Mode |  Description | MPI Function |
-| - | - | - |
-| Receive | Returns control when data has been received successfully | `MPI_Recv()` |
+| Mode    | MPI Function |
+| ------- | ------------ |
+| Receive | `MPI_Recv()` |
+
+#### Synchronous sends
+
+In synchronous communication, control is returned when the receiving rank has received the data and sent back, or
+"posted", confirmation. It's just like making a phone call. Data isn't exchanged until you and the person
+have both picked up the phone and doesn't finish until you both hang up.
+
+Synchronous communication is typically used
+when you need to guarantee synchronisation, such as in iterative computational methods or time dependent simulations
+where it is vital to ensure consistency. It's also the easiest communication mode to develop and debug with because of
+its predictable behaviour.
+
+#### Buffered sends
+
+In a buffered send, the data is written to a (user supplied) internal buffer before it is sent and returns control back
+as soon as the data is copied. This means `MPI_Bsend()` returns before the data has been received by the receiving rank,
+making this an asynchronous type of communication as the sending rank continues to do other work whilst the data is
+transmitted. This is just like sending a letter or an e-mail to someone. You write your message, put it in an
+envelope and drop it off in the postbox. You are blocked from doing other tasks whilst you write and send the letter,
+but as soon as it's in the postbox you do other tasks and don't wait for the letter to be delivered!
+
+Buffered sends are good for large messages and for improving the performance of your communication, by taking advantage
+of the asynchronous nature of the data transfer.
+
+#### Ready sends
+
+Ready sends are different to synchronous and buffered sends in that they need a rank to already be listening to receive
+a message, whereas the other two modes can send their data before a rank is ready. It's a specialised type of
+communication used **only** when you can guarantee that a rank will be ready to receive data. If this is not the case,
+the outcome is undefined and will likely result in errors being introduced into your program. The main advantage of this
+mode is that you eliminate the overhead of having to check that the data is ready to be sent, and so is often used in
+performance critical situations.
+
+#### Standard sends
+
+The standard send mode is the most common used type of send operation, as it provides a balance between ease of use and
+performance. Under the hood, the standard send is either a buffered or a synchronous send, depending on the availability
+of system resources (e.g. the size of the internal buffer) and which mode MPI has determined to be the most efficient.
+
+> ## Which mode should I use?
+>
+> Each communication mode has its own use cases where it excels. However, it is often easiest, at first, to use the
+> standard send, `MPI_Send()`, and optimise later. If the standard send doesn't meet your requirements, or if you need
+> more control over communication, then pick which communication mode suits your requirements best.
+{: .callout}
+
+> ## Communication mode reference
+>
+> | Mode        | Description                                                                                                                                                                 | Analogy                                        | MPI Function  |
+> | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------- |
+> | Synchronous | Returns control to the program when the message has been sent and received successfully.                                                                                    | Making a phone call                            | `MPI_Ssend()` |
+> | Buffered    | Returns control immediately after copying the message to a buffer, regardless of whether the receive has happened or not.                                                   | Sending a letter or e-mail                     | `MPI_Bsend()` |
+> | Ready       | Returns control immediately, assuming the matching receive has already been posted. Can lead to errors if the receive is not ready.                                         | Talking to someone you think/hope is listening | `MPI_Rsend()` |
+> | Standard    | Returns control when it's safe to reuse the send buffer. May or may not wait for the matching receive (synchronous mode), depending on MPI implementation and message size. | Phone call or letter                           | `MPI_Send()`  |
+{: .hidden-callout}
 
 ### Blocking vs. non-blocking communication
 
