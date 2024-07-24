@@ -23,31 +23,19 @@ parallelisation often relies on how you communicate data.
 
 ## Communicating data using messages
 
-MPI is a standardised framework for passing data and other messages between independently running processes. If we want
-to share or access data from one rank to another, we use the MPI API to transfer data in a "message." To put it simply,
-a message is merely a data structure which contains the data, and is usually expressed as a collection of data elements
-of a particular data type.
+MPI is a framework for passing data and other messages between independently running processes. If we want
+to share or access data from one rank to another, we use the MPI API to transfer data in a "message." A message is a
+data structure which contains the data, and is usually expressed as a collection of data elements of a particular data
+type.
 
-Sending and receiving data happens in one of two ways. We either want to send data from one specific rank to another,
-known as point-to-point communication, or to/from multiple ranks all at once to a single target, known as collective
-communication. In both cases, we have to *explicitly* "send" something and to *explicitly* "receive" something. We've
-emphasised *explicitly* here to make clear that data communication can't happen by itself. A rank can't just
-get data from one rank, and ranks don't automatically send and receive data. If we don't program
-nin data communication, data isn't shared. Unfortunately, none of this communication happens for free, either. With
-every message sent, there is an overhead which impacts the performance of your program. Often we won't notice this
-overhead, as it is usually quite small. But if we communicate large amounts data or small amounts too often, those
- small overheads rapidly add up into a noticeable performance hit.
-
-> ## A collective mistake
->
-> A common mistake for new MPI users is to write code using point-to-point communication which emulates what the
-> collective communication functions are designed to do. This is an inefficient way to share data. The collective
-> routines in MPI have multiple tricks and optimizations up their sleeves, resulting in communication overheads much
-> lower than the equivalent point-to-point approach. One other advantage is that collective communication often requires
-> less code to achieve the same thing, which is always a win. It is almost always better to use collective
-> operations where you can.
->
-{: .callout}
+Sending and receiving data usually happens in two patterns. We either want to send data from one specific rank to
+another, known as point-to-point communication, or to/from multiple ranks all at once to a single or multiples targets,
+known as collective communication. Whatever we do, we always have to *explicitly* "send" something and to *explicitly*
+"receive" something. Data communication can't happen by itself. A rank can't just get data from one rank, and ranks
+don't automatically send and receive data. If we don't program in data communication, data isn'. Unfortunately,
+none of this communication happens for free, either. With every message sent, there is an overhead which impacts the
+performance of your program. Often we won't notice this overhead, as it is usually quite small. But if we communicate
+large amounts data or small amounts too often, those small overheads rapidly add up into a noticeable performance hit.
 
 To get an idea of how communication typically happens, imagine we have two ranks: rank A and rank B. If rank A wants to
 send data to rank B (e.g., point-to-point), it must first call the appropriate MPI send function which puts that data
@@ -58,20 +46,122 @@ an acknowledgement to say that the transfer has finished, similar to read receip
 
 > ## Check your understanding
 >
-> In an imaginary simulation, each rank is responsible for calculating the physical properties for a subset of
-> cells on a larger simulation grid. Another calculation, however, needs to know the average of, for example, the
-> temperature for the subset of cells for each rank. What approaches could you use to share this data?
+> In a simulation each rank is responsible for calculating the physical properties for a subset of cells on a larger
+> simulation grid. Another calculation, however, needs to know the average of, for example, the temperature for the
+> subset of cells for each rank. What approaches could you use to share this data?
 >
 > > ## Solution
 > >
 > > There are multiple ways to approach this situation, but the most efficient approach would be to use collective
-> > operations to send the average temperature to a root rank (or all ranks) to perform the final calculation. You can,
-> > of course, also use a point-to-point pattern, but it would be less efficient.
+> > operations to send the average temperature to a main rank which performs the final calculation. You can, of course,
+> > also use a point-to-point pattern, but it would be less efficient, especially with a large number of ranks.
 > >
 > {: .solution}
 {: .challenge}
 
-### Communication modes
+## MPI data types
+
+When we send a message we need to know the size of the data being transferred. The size is not the number of bytes of
+data that is being sent, as you may expect, but is instead the number of elements of the data type being sent. When
+we send a message, we have to tell MPI how many elements of "something" we are sending and what type of data it is. If
+we don't do this correctly, we'll either end up telling MPI to send only *some* of the data or try to send more data
+than we want! For example, if we were sending an array and we specify too few elements, then only a subset of the array
+will be sent or received. But if we specify too many elements, than we are likely to end up with either a segmentation
+fault or undefined behaviour! And the same can happen if we don't specify the correct data type.
+
+There are two types of data type in MPI: "basic" data types and derived data types. The basic data types are in essence
+the same data types we would use in C such as `int`, `float`, `char` and so on. However, MPI doesn't use the same
+primitive C types in its API and instead uses a set of constants which internally represent the data types. These data
+types are in the table below:
+
+| MPI basic data type    | C equivalent           |
+| ---------------------- | ---------------------- |
+| MPI_SHORT              | short int              |
+| MPI_INT                | int                    |
+| MPI_LONG               | long int               |
+| MPI_LONG_LONG          | long long int          |
+| MPI_UNSIGNED_CHAR      | unsigned char          |
+| MPI_UNSIGNED_SHORT     | unsigned short int     |
+| MPI_UNSIGNED           | unsigned int           |
+| MPI_UNSIGNED_LONG      | unsigned long int      |
+| MPI_UNSIGNED_LONG_LONG | unsigned long long int |
+| MPI_FLOAT              | float                  |
+| MPI_DOUBLE             | double                 |
+| MPI_LONG_DOUBLE        | long double            |
+| MPI_BYTE               | char                   |
+
+These constants aren't the same as the primitive types in C, so we can't use them to create variables, e.g.,
+
+```c
+MPI_INT my_int = 1;
+```
+
+is not valid code because, under the hood, these constants are actually special data structures used internally by MPI.
+Therefore we can only them as arguments in MPI functions.
+
+> ## Don't forget to update your types
+>
+> At some point during development, you might change an `int` to a `long` or a `float` to a `double`, or something to
+> something else. Once you've gone through your codebase and updated the types for, e.g., variable declarations and
+> function signatures, you must also do the same for MPI functions. If you don't, you'll end up running into
+> communication errors. It may be helpful to define compile-time constants for the data types and use those instead. If
+> you ever do need to change the type, you would only have to do it in one place.
+>
+> ```c
+> /* define constants for your data types */
+> #define MPI_INT_TYPE MPI_INT
+> #define INT_TYPE int
+> /* use them as you would normally */
+> INT_TYPE my_int = 1;
+> ```
+>
+{: .callout}
+
+Derived data types, on the other hand, are very similar to C structures which we define by using the basic MPI data
+types. They're often useful to group together similar data in communications, or when you need to a structure from one
+rank to another. This will be covered in more detail in the [Advanced Communication
+Techniques](dirac-intro-to-mpi-advanced-communication) episode.
+
+> ## What type should you use?
+>
+> For the following pieces of data, what MPI data types should you use?
+>
+> 1. `a[] = {1, 2, 3, 4, 5};`
+> 2. `a[] = {1.0, -2.5, 3.1456, 4591.223, 1e-10};`
+> 3. `a[] = "Hello, world!";`
+>
+> > ## Solution
+> >
+> > 1. `MPI_INT`
+> > 2. `MPI_DOUBLE` - `MPI_FLOAT` would not be correct as `float`'s contain 32 bits of data whereas `double`'s
+> >    are 64 bit.
+> > 3. `MPI_BYTE` or `MPI_CHAR` - you may want to use [strlen](https://man7.org/linux/man-pages/man3/strlen.3.html) to
+> >    calculate how many elements of `MPI_CHAR` being sent
+> {: .solution}
+{: .challenge}
+
+## Communicators
+
+All communication in MPI is handled by something known as a *communicator*. We can think of a communicator as being a
+collection of ranks which are able to exchange data with one another. What this means is that every communication
+between two (or more) ranks is linked to a specific communicator in the program. When we run an MPI application, the
+ranks will belong to the default communicator known as `MPI_COMM_WORLD`. We've seen this in earlier episodes when, for
+example, we've used functions like `MPI_Comm_rank()` to get the rank number,
+
+```c
+int my_rank;
+MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);  /* MPI_COMM_WORLD is the communicator the rank belongs to */
+```
+
+In addition to `MPI_COMM_WORLD`, we can make sub-communicators and distribute ranks into them. Messages can only be
+sent and received to and from the same communicator, effectively isolating messages to a communicator. For most
+applications, we usually don't need anything other than `MPI_COMM_WORLD`. But organising ranks into communicators can be
+helpful in some circumstances, as you can create small "work units" of multiple ranks to dynamically schedule the
+workload, or to help compartmentalise the problem into smaller chunks by using a [virtual cartesian
+topology](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node192.htm#Node192). Throughout this lesson, we will
+stick to using `MPI_COMM_WORLD`.
+
+## Communication modes
 
 When sending data between ranks, MPI will use one of four communication modes: standard, buffered, synchronous and
 ready. When a communication function is called, it takes control of program execution until the communication has
@@ -80,12 +170,12 @@ computation, e.g. you aren't able to overwrite the data in the send buffer, whic
 when this happens all depends on which communication mode you use; each mode handles this differently. MPI doesn't
 guess at which mode *should* be used, we have to program which mode to use with the associated communication functions:
 
-| Mode        | Function      |
-| ----------- | ------------- |
-| Synchronous | `MPI_SSend()` |
-| Buffered    | `MPI_Bsend()` |
-| Ready       | `MPI_Rsend()` |
-| Send        | `MPI_Send()`  |
+| Mode        | Blocking function |
+| ----------- | ----------------- |
+| Synchronous | `MPI_SSend()`     |
+| Buffered    | `MPI_Bsend()`     |
+| Ready       | `MPI_Rsend()`     |
+| Send        | `MPI_Send()`      |
 
 In contrast to the four modes for sending data, receiving data only has one mode and therefore only a single function.
 
@@ -93,7 +183,7 @@ In contrast to the four modes for sending data, receiving data only has one mode
 | ------- | ------------ |
 | Receive | `MPI_Recv()` |
 
-#### Synchronous sends
+### Synchronous sends
 
 In synchronous communication, control is returned when the receiving rank has received the data and sent back, or
 "posted", confirmation. It's just like making a phone call. Data isn't exchanged until you and the person
@@ -104,7 +194,7 @@ when you need to guarantee synchronisation, such as in iterative computational m
 where it is vital to ensure consistency. It's also the easiest communication mode to develop and debug with because of
 its predictable behaviour.
 
-#### Buffered sends
+### Buffered sends
 
 In a buffered send, the data is written to a (user supplied) internal buffer before it is sent and returns control back
 as soon as the data is copied. This means `MPI_Bsend()` returns before the data has been received by the receiving rank,
@@ -116,7 +206,7 @@ but as soon as it's in the postbox you do other tasks and don't wait for the let
 Buffered sends are good for large messages and for improving the performance of your communication, by taking advantage
 of the asynchronous nature of the data transfer.
 
-#### Ready sends
+### Ready sends
 
 Ready sends are different to synchronous and buffered sends in that they need a rank to already be listening to receive
 a message, whereas the other two modes can send their data before a rank is ready. It's a specialised type of
@@ -125,7 +215,7 @@ the outcome is undefined and will likely result in errors being introduced into 
 mode is that you eliminate the overhead of having to check that the data is ready to be sent, and so is often used in
 performance critical situations.
 
-#### Standard sends
+### Standard sends
 
 The standard send mode is the most common used type of send operation, as it provides a balance between ease of use and
 performance. Under the hood, the standard send is either a buffered or a synchronous send, depending on the availability
@@ -138,7 +228,7 @@ of system resources (e.g. the size of the internal buffer) and which mode MPI ha
 > more control over communication, then pick which communication mode suits your requirements best.
 {: .callout}
 
-> ## Communication mode reference
+> ## Communication mode summary
 >
 > | Mode        | Description                                                                                                                                                                 | Analogy                                        | MPI Function  |
 > | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- | ------------- |
@@ -146,9 +236,9 @@ of system resources (e.g. the size of the internal buffer) and which mode MPI ha
 > | Buffered    | Returns control immediately after copying the message to a buffer, regardless of whether the receive has happened or not.                                                   | Sending a letter or e-mail                     | `MPI_Bsend()` |
 > | Ready       | Returns control immediately, assuming the matching receive has already been posted. Can lead to errors if the receive is not ready.                                         | Talking to someone you think/hope is listening | `MPI_Rsend()` |
 > | Standard    | Returns control when it's safe to reuse the send buffer. May or may not wait for the matching receive (synchronous mode), depending on MPI implementation and message size. | Phone call or letter                           | `MPI_Send()`  |
-{: .hidden-callout}
+{: .prereq}
 
-### Blocking vs. non-blocking communication
+## Blocking and non-blocking communication
 
 Communication can also be done in two additional ways: blocking and non-blocking. In blocking mode, communication
 functions will only return once the send buffer is ready to be re-used, meaning that the message has been both sent and
@@ -227,126 +317,3 @@ communication and calculation is often worth the more difficult implementation a
 >
 {: .challenge}
 
-## Communicators
-
-Communication in MPI happens in something known as a *communicator*. We can think of a communicator as fundamentally
-being a collection of ranks which are able to exchange data with one another. What this means is that every
-communication between two (or more) ranks is linked to a specific communicator in the program. When we run an MPI
-application, the ranks will belong to the default communicator known as `MPI_COMM_WORLD`. We've seen this in earlier
-episodes when, for example, we've used functions like `MPI_Comm_rank()` to get the rank number,
-
-```c
-int my_rank;
-MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);  /* MPI_COMM_WORLD is the communicator the rank belongs to */
-```
-
-In addition to `MPI_COMM_WORLD`, we can make sub-communicators and distribute ranks into them. Messages can only be
-sent and received to and from the same communicator, effectively isolating messages to a communicator. For most
-applications, we usually don't need anything other than `MPI_COMM_WORLD`. But organising ranks into communicators can be
-helpful in some circumstances, as you can create small "work units" of multiple ranks to dynamically schedule the
-workload, or to help compartmentalise the problem into smaller chunks by using a [virtual cartesian
-topology](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node192.htm#Node192). Throughout this lesson, we will
-stick to using `MPI_COMM_WORLD`.
-
-<!-- Within communicators there are groups, which are a collection of ranks within a communicator which you can somewhat
-think of as being "sub-communicators" in the communicator.
-
-> ## Creating communicators
->
-> Creating a new communicator can be done in multiple ways. You could can, for example, create new communicators by
-> splitting one into multiple or you could create a completely new communicator. By using the [documentation for
-> `MPI_Comm_create`](https://www.open-mpi.org/doc/v4.1/man3/MPI_Comm_create.3.php), create a new communicator which
-> contains only the first two ranks.
->
-> > ## Solution
-> >
-> > ```c
-> > MPI_Comm_create();
-> >```
-> >
-> {: .solution}
->
-{: .challenge} -->
-
-## Basic MPI data types
-
-To send a message, we need to know the size of it. The size is not the number of bytes of data that is being sent but is
-instead expressed as the number of elements of a particular data type you want to send. So when we send a message, we
-have to tell MPI how many elements of "something" we are sending and what type of data it is. If we don't do this
-correctly, we'll either end up telling MPI to send only *some* of the data or try to send more data than we want! For
-example, if we were sending an array and we specify too few elements, then only a subset of the array will be sent or
-received. But if we specify too many elements, than we are likely to end up with either a segmentation fault or some
-undefined behaviour! If we don't specify the correct data type, then bad things will happen under the hood when it
-comes to communicating.
-
-There are two types of data type in MPI: basic MPI data types and derived data types. The basic data types are in
-essence the same data types we would use in C (or Fortran), such as `int`, `float`, `bool` and so on. When defining the
-data type of the elements being sent, we don't use the primitive C types. MPI instead uses a set of compile-time
-constants which internally represents the data types. These data types are in the table below:
-
-| MPI basic data type | C equivalent |
-| - | - |
-| MPI_SHORT | short int |
-| MPI_INT | int |
-| MPI_LONG | long int |
-| MPI_LONG_LONG | long long int |
-| MPI_UNSIGNED_CHAR | unsigned char |
-| MPI_UNSIGNED_SHORT |unsigned short int |
-| MPI_UNSIGNED | unsigned int |
-| MPI_UNSIGNED_LONG | unsigned long int |
-| MPI_UNSIGNED_LONG_LONG | unsigned long long int |
-| MPI_FLOAT | float |
-| MPI_DOUBLE | double |
-| MPI_LONG_DOUBLE | long double |
-| MPI_BYTE | char |
-
-These constants don't expand out to actual date types, so we can't use them in variable declarations, e.g.,
-
-```c
-MPI_INT my_int;
-```
-
-is not valid code because under the hood, these constants are actually special structs used internally. Therefore we can
-only uses these expressions as arguments in MPI functions.
-
-> ## Don't forget to update your types
->
-> At some point during development, you might change an `int` to a `long` or a `float` to a `double`, or something to
-> something else. Once you've gone through your codebase and updated the types for, e.g., variable declarations and
-> function signatures, you must also do the same for MPI functions. If you don't, you'll end up running into
-> communication errors. It may be helpful to define compile-time constants for the data types and use those instead. If
-> you ever do need to change the type, you would only have to do it in one place.
->
-> ```c
-> /* define constants for your data types */
-> #define MPI_INT_TYPE MPI_INT
-> #define INT_TYPE int
-> /* use them as you would normally */
-> INT_TYPE my_int = 1;
-> ```
->
-{: .callout}
-
-Derived data types are data structures which you define, built using the basic MPI data types. These derived types are
-analogous to defining structures or type definitions in C. They're most often helpful to group together similar data to
-send/receive multiple things in a single communication, or when you need to communicate non-contiguous data such as
-"vectors" or sub-sets of an array. This will be covered in the [Advanced Communication
-Techniques](dirac-intro-to-mpi-advanced-communication) episode.
-
-> ## What type should you use?
->
-> For the following pieces of data, what MPI data types should you use?
->
-> 1. `a[] = {1, 2, 3, 4, 5};`
-> 2. `a[] = {1.0, -2.5, 3.1456, 4591.223, 1e-10};`
-> 3. `a[] = "Hello, world!";`
->
-> > ## Solution
-> >
-> > 1. `MPI_INT`
-> > 2. `MPI_DOUBLE` - `MPI_FLOAT` would not be correct as `float`'s contain 32 bits of data whereas `double`'s
-> >    are 64 bit.
-> > 3. `MPI_BYTE` or `MPI_CHAR` - you may want to use [strlen](https://man7.org/linux/man-pages/man3/strlen.3.html) to
-> >    calculate how many elements of `MPI_CHAR` being sent
-> {: .solution}
-{: .challenge}
