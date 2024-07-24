@@ -259,6 +259,15 @@ background, so other work can continue in the foreground whilst the data is tran
 to check periodically if the communication is done -- and to not modify the data/variable/memory before it has been
 received!
 
+> ## Is `MPI_Bsend()` non-blocking?
+>
+> The buffered communication mode is a type of asynchronous communication, because the function returns before the data
+> has been received by another rank. But, it's not a non-blocking call **unless** you use the non-blocking version
+> `MPI_Ibsend()` (more on this in a later episode). Even though the data transfer happens in the background, allocating
+> and copying data to the send buffer does not and it blocks execution. On the other hand, `MPI_Ibsend()` is "fully"
+> asynchronous because even allocating and copying data to the send buffer happens in the background.
+{: .callout}
+
 One downside to blocking communication is that if rank B is never listening for messages, rank A will become
 *deadlocked*. A deadlock happens when your program hangs indefinitely because the send (or receive) is unable to
 complete. Deadlocks occur for a countless number of reasons. For example, we may forget to write the corresponding
