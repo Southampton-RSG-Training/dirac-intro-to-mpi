@@ -46,15 +46,18 @@ an acknowledgement to say that the transfer has finished, similar to read receip
 
 > ## Check your understanding
 >
-> In a simulation each rank is responsible for calculating the physical properties for a subset of cells on a larger
-> simulation grid. Another calculation, however, needs to know the average of, for example, the temperature for the
-> subset of cells for each rank. What approaches could you use to share this data?
+> Consider a simulation where each rank calculates the physical properties for a subset of cells on a very large
+> grid of points. However, the next step of the calculation needs to know the average temperature across the entire grid
+> of points. How would you use calculate the average temperature?
 >
 > > ## Solution
 > >
 > > There are multiple ways to approach this situation, but the most efficient approach would be to use collective
 > > operations to send the average temperature to a main rank which performs the final calculation. You can, of course,
 > > also use a point-to-point pattern, but it would be less efficient, especially with a large number of ranks.
+> >
+> > If you weren't do this in parallel, or instead using shared-memory parallelism, you wouldn't need to do any
+> > communication to get the data required to calculate the average.
 > >
 > {: .solution}
 {: .challenge}
@@ -163,12 +166,13 @@ stick to using `MPI_COMM_WORLD`.
 
 ## Communication modes
 
-When sending data between ranks, MPI will use one of four communication modes: standard, buffered, synchronous and
-ready. When a communication function is called, it takes control of program execution until the communication has
-been deemed to finish. What finished means is that the send buffer is ready to be re-used for the next communication or
-computation, e.g. you aren't able to overwrite the data in the send buffer, which would lead to strange reslts! How and
-when this happens all depends on which communication mode you use; each mode handles this differently. MPI doesn't
-guess at which mode *should* be used, we have to program which mode to use with the associated communication functions:
+When sending data between ranks, MPI will use one of four communication modes: synchronous, buffered, ready or standard.
+When a communication function is called, it takes control of program execution until the send-buffer is safe to be
+re-used again. What this means is that it's safe to re-use the memory/variable you passed without affecting the data
+that is communicated. If MPI didn't have this concept of safety, then you could quite easily overwrite or destroy any
+data before it is send! This would lead to some very strange behaviour which would be very hard to debug. The difference
+between the communication mode is when the buffer becomes safe to re-use. MPI won't guess at which mode *should* be
+used. That is up to the programmer. Therefore each mode has an associated communication function:
 
 | Mode        | Blocking function |
 | ----------- | ----------------- |
@@ -225,7 +229,8 @@ of system resources (e.g. the size of the internal buffer) and which mode MPI ha
 >
 > Each communication mode has its own use cases where it excels. However, it is often easiest, at first, to use the
 > standard send, `MPI_Send()`, and optimise later. If the standard send doesn't meet your requirements, or if you need
-> more control over communication, then pick which communication mode suits your requirements best.
+> more control over communication, then pick which communication mode suits your requirements best. You'll probably need
+> to experiment to find the best!
 {: .callout}
 
 > ## Communication mode summary
@@ -240,16 +245,26 @@ of system resources (e.g. the size of the internal buffer) and which mode MPI ha
 
 ## Blocking and non-blocking communication
 
-Communication can also be done in two additional ways: blocking and non-blocking. In blocking mode, communication
-functions will only return once the send buffer is ready to be re-used, meaning that the message has been both sent and
-received. In terms of a blocking synchronous send, control will not be passed back to the program until the message sent
-by rank A has reached rank B, and rank B has sent an acknowledgement back. If rank B is never listening for messages,
-rank A will become *deadlocked*. A deadlock happens when your program hangs indefinitely because the send (or receive)
-is unable to complete. Deadlocks occur for a countless number of reasons. For example, we may forget to write the
-corresponding receive function when sending data. Alternatively, a function may return earlier due to an error which
-isn't handled properly, or a while condition may never be met creating an infinite loop. Furthermore, ranks can
-sometimes crash silently making communication with them impossible, but this doesn't stop any attempts to send data to
-crashed rank.
+In addition to the communication modes, the communication function operate in two ways: either by blocking execution
+until the communication is complete (like how a synchronous send blocks until an receive acknowledgment is sent back),
+or by returning immediately, before any part of the communication has finished, with non-blocking communication. Just
+like with the different communication modes, MPI doesn't decide if it should use blocking or non-blocking communication
+calls. That is, again, up to the programmer to program. As we'll see in later episodes, there are different functions
+for blocking and non-blocking communication.
+
+A blocking synchronous send is one where the message has to be sent from rank A, received by B and an acknowledgment
+sent back to A before the communication is complete and the function returns. In the non-blocking version, the function
+returns immediately even before rank A has sent the message or rank B has received it. The communication happens in the
+background, so other work can continue in the foreground whilst the data is transferred. It is then up to the programmer
+to check periodically if the communication is done -- and to not modify the data/variable/memory before it has been
+received!
+
+One downside to blocking communication is that if rank B is never listening for messages, rank A will become
+*deadlocked*. A deadlock happens when your program hangs indefinitely because the send (or receive) is unable to
+complete. Deadlocks occur for a countless number of reasons. For example, we may forget to write the corresponding
+receive function when sending data. Or a function may return earlier due to an error which isn't handled properly, or a
+while condition may never be met creating an infinite loop. Ranks can also can silently, making communication with them
+impossible, but this doesn't stop any attempts to send data to crashed rank.
 
 > ## Avoiding communication deadlocks
 >
@@ -275,7 +290,7 @@ work.
 
 Non-blocking communication hands back control, immediately, before the communication has finished. Instead of your
 program being *blocked* by communication, ranks will immediately go back to the heavy work and instead periodically
-check if there is data to receive (which you must remember to program) instead of waiting around. The advantage of this
+check if there is data to receive (which is up to the programmer) instead of waiting around. The advantage of this
 communication pattern is illustrated in the diagram below, where less time is spent communicating.
 
 <img src="fig/non-blocking-wait.png" alt="Non-blocking communication" height="250"/>
