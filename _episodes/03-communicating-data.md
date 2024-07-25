@@ -32,10 +32,10 @@ Sending and receiving data can happen happen in two patterns. We either want to 
 another, known as point-to-point communication, or to/from multiple ranks all at once to a single or multiples targets,
 known as collective communication. Whatever we do, we always have to *explicitly* "send" something and to *explicitly*
 "receive" something. Data communication can't happen by itself. A rank can't just get data from one rank, and ranks
-don't automatically send and receive data. If we don't program in data communication, data isn't sent. Unfortunately,
-none of this communication happens for free, either. With every message sent, there is an overhead which impacts the
-performance of your program. Often we won't notice this overhead, as it is usually quite small. But if we communicate
-large data or small amounts too often, those (small) overheads add up into a noticeable performance hit.
+don't automatically send and receive data. If we don't program in data communication, data isn't exchanged.
+Unfortunately, none of this communication happens for free, either. With every message sent, there is an overhead which
+impacts the performance of your program. Often we won't notice this overhead, as it is usually quite small. But if we
+communicate large data or small amounts too often, those (small) overheads add up into a noticeable performance hit.
 
 To get an idea of how communication typically happens, imagine we have two ranks: rank A and rank B. If rank A wants to
 send data to rank B (e.g., point-to-point), it must first call the appropriate MPI send function which typically (but
@@ -57,8 +57,8 @@ finished, similar to read receipts in e-mails and instant messages.
 > > operations to send the average temperature to a main rank which performs the final calculation. You can, of course,
 > > also use a point-to-point pattern, but it would be less efficient, especially with a large number of ranks.
 > >
-> > If the simulation wasn't done in parallel, or was instead using shared-memory parallelism, we wouldn't need to do
-> > any communication to get the data required to calculate the average.
+> > If the simulation wasn't done in parallel, or was instead using shared-memory parallelism, such as OpenMP, we
+> > wouldn't need to do any communication to get the data required to calculate the average.
 > >
 > {: .solution}
 {: .challenge}
@@ -166,7 +166,7 @@ we usually don't need anything other than `MPI_COMM_WORLD`. But organising ranks
 some circumstances, as you can create small "work units" of multiple ranks to dynamically schedule the workload, create
 one communicator for each physical hardware node on a HPC cluster, or to help compartmentalise the problem into smaller
 chunks by using a [virtual cartesian topology](https://www.mpi-forum.org/docs/mpi-3.1/mpi31-report/node192.htm#Node192).
-Throughout this lesson, we will stick to using `MPI_COMM_WORLD`.
+Throughout this course, we will stick to using `MPI_COMM_WORLD`.
 
 ## Communication modes
 
