@@ -37,7 +37,19 @@ happening in the background, even though the communication cannot complete until
 > ## So, how do I use non-blocking communication?
 >
 > Just as with buffered, synchronous, ready and standard sends, MPI has to be programmed to use either blocking or
-> non-blocking communication. For almost every blocking function, there is a non-blocking equivalent .
+> non-blocking communication. For almost every blocking function, there is a non-blocking equivalent. Non-blocking
+> functions have the same name as their blocking counterpart, but prefixed with "I". The "I" stands for "immediate",
+> indicating that the function returns immediately and does not block the program. The table below shows some examples
+> of blocking functions and their non-blocking counterparts.
+>
+> | Blocking        | Non-blocking     |
+> | --------------- | ---------------- |
+> | `MPI_Bsend()`   | `MPI_Ibsend()`   |
+> | `MPI_Barrier()` | `MPI_Ibarrier()` |
+> | `MPI_Reduce()`  | `MPI_Ireduce()`  |
+>
+> But, this isn't the complete picture. As we'll see later, we need to do some additional bookkeeping to be able to use
+> non-blocking communications.
 >
 {: .callout}
 
@@ -102,21 +114,6 @@ int MPI_Isend(
 The arguments are identical to `MPI_Send()`, other than the addition of the `*request` argument. This argument is known
 as an *handle* (because it "handles" a communication request) which is used to track the progress of a (non-blocking)
 communication.
-
-> ## Naming conventions
->
-> Non-blocking functions have the same name as their blocking counterpart, but prefixed with "I". The "I" stands for
-> "immediate", indicating that the function returns immediately and does not block the program whilst data is being
-> communicated in the background. The table below shows some examples of blocking functions and their non-blocking
-> counterparts.
->
-> | Blocking | Non-blocking|
-> | -------- | ----------- |
-> | `MPI_Bsend()` | `MPI_Ibsend()` |
-> | `MPI_Barrier()` | `MPI_Ibarrier()` |
-> | `MPI_Reduce()` | `MPI_Ireduce()` |
->
-{: .callout}
 
 When we use non-blocking communication, we have to follow it up with `MPI_Wait()` to synchronise the
 program and make sure `*buf` is ready to be re-used. This is incredibly important to do. Suppose we are sending an array
