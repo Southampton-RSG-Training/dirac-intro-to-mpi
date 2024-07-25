@@ -19,28 +19,28 @@ keypoints:
 
 In the previous episodes, we learnt how to send messages between two ranks or collectively to multiple ranks. In both
 cases, we used blocking communication functions which meant our program wouldn't progress until the communication had
-completed. It takes time, and computing power, to transfer data into buffers, to send that data around (over the
+completed. It takes time and computing power to transfer data into buffers, to send that data around (over the
 network) and to receive the data into another rank. But for the most part, the CPU isn't actually doing much at all
 during communication, when it could still be number crunching.
 
 ## Why bother with non-blocking communication?
 
-Non-blocking communication is communication which is handled in the background. So we don't have to let any CPU cycles
-go to waste! If MPI is dealing with the data transfer in the background, we can continue to use the CPU in the
-foreground and keep doing tasks whilst the communication completes. By *overlapping* computation with communication, we
-hide the latency/overhead of communication. This is critical in lots of HPC applications, especially when using lots of
-CPUs because as the number of CPUs increases, the overhead of communicating with all those CPUs increases. If you use
-blocking synchronous sends, the time spent communicating data may become longer than the time spent calculating!
-All non-blocking communications are asynchronous, even when using synchronous sends because the communication is still
-happening in the background, even though the communication cannot complete until the data is received.
+Non-blocking communication is communication which happens in the background. So we don't have to let any CPU cycles go
+to waste! If MPI is dealing with the data transfer in the background, we can continue to use the CPU in the foreground
+and keep doing tasks whilst the communication completes. By *overlapping* computation with communication, we hide the
+latency/overhead of communication. This is critical for lots of HPC applications, especially when using lots of CPUs,
+because, as the number of CPUs increases, the overhead of communicating with them all also increases. If you use
+blocking synchronous sends, the time spent communicating data may become longer than the time spent creating data to
+send! All non-blocking communications are asynchronous, even when using synchronous sends, because the communication
+happens in the background, even though the communication cannot complete until the data is received.
 
 > ## So, how do I use non-blocking communication?
 >
 > Just as with buffered, synchronous, ready and standard sends, MPI has to be programmed to use either blocking or
-> non-blocking communication. For almost every blocking function, there is a non-blocking equivalent. Non-blocking
-> functions have the same name as their blocking counterpart, but prefixed with "I". The "I" stands for "immediate",
-> indicating that the function returns immediately and does not block the program. The table below shows some examples
-> of blocking functions and their non-blocking counterparts.
+> non-blocking communication. For almost every blocking function, there is a non-blocking equivalent. They have the same
+> name as their blocking counterpart, but prefixed with "I". The "I" stands for "immediate", indicating that the
+> function returns immediately and does not block the program. The table below shows some examples of blocking functions
+> and their non-blocking counterparts.
 >
 > | Blocking        | Non-blocking     |
 > | --------------- | ---------------- |
@@ -54,17 +54,18 @@ happening in the background, even though the communication cannot complete until
 {: .callout}
 
 By effectively utilizing non-blocking communication, we can develop applications that scale significantly better during
-intensive communication. However, this comes with the trade-off of increased conceptual and code complexity. Since
+intensive communication. However, this comes with the trade-off of both increased conceptual and code complexity. Since
 non-blocking communication doesn't keep control until the communication finishes, we don't actually know if a
-communication has finished, unless we check; this is usually referred to as synchronisation, as we have to keep ranks in
+communication has finished unless we check; this is usually referred to as synchronisation, as we have to keep ranks in
 sync to ensure they have the correct data. So whilst our program continues to do other work, it also has to keep pinging
-to see if the communication has finished, keeping ranks synchronised. If we check too often, or don't have enough tasks
-to "fill in the gaps", then there is no advantage to using non-blocking communication and we may replace communication
-overheads with synchronisation! It is not always clear cut or predictable if non-blocking communication will improve
-performance. For example, if one ranks depends on the data of another rank, and there is no work for it to do, that rank
-will wait around until the data is ready, as illustrated in the diagram below, making that non-blocking communication
-effectively a blocking communication. Therefore unless code is structured to take advantage of being able to overlap
-communication with computation, non-blocking communication adds complexity to our code for no gain.
+to see if the communication has finished, to ensure ranks are synchronised. If we check too often, or don't have enough
+tasks to "fill in the gaps", then there is no advantage to using non-blocking communication and we may replace
+communication overheads with time spent keeping ranks in sync! It is not always clear cut or predictable if non-blocking
+communication will improve performance. For example, if one ranks depends on the data of another, and there are no tasks
+for it to do whilst it waits, that rank will wait around until the data is ready, as illustrated in the diagram below.
+This essentially makes that non-blocking communication a blocking communication. Therefore unless our code is structured
+to take advantage of being able to overlap communication with computation, non-blocking communication adds complexity to
+our code for no gain.
 
 <img src="fig/non-blocking-wait-data.png" alt="Non-blocking communication with data dependency" height="250"/>
 
