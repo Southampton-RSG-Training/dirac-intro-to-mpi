@@ -202,7 +202,8 @@ Usually we will return the value of `MPI_Finalize` from the main function
 
 > ## I don't use command line arguments
 >
-> If your main function has no arguments, you can instead pass `NULL` for both arguments to `MPI_Init()`.
+> If your main function has no arguments because your program doesn't use any command line arguments, you can instead
+> pass `NULL` to `MPI_Init()` instead.
 >
 > ~~~c
 > int main(void) {
