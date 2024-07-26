@@ -24,30 +24,30 @@ MPI stands for ***Message Passing Interface*** and was developed in the early 19
 To address this challenge, researchers and computer scientists from leading vendors and organizations, including Intel, IBM, and Argonne National Laboratory, collaborated to develop MPI. Their collective efforts resulted in the release of the first version of the MPI standard, MPI-1, in 1994. This standardisation initiative aimed to provide a unified communication protocol and library for parallel computing.
 
 > ## MPI versions
->  Since its inception, MPI has undergone several revisions, each 
+>  Since its inception, MPI has undergone several revisions, each
 > introducing new features and improvements:
-> - **MPI-1 (1994):** The initial release of the MPI standard provided 
+> - **MPI-1 (1994):** The initial release of the MPI standard provided
 > a common set of functions, datatypes, and communication semantics.
 > It formed the foundation for parallel programming using MPI.
-> - **MPI-2 (1997):** This version expanded upon MPI-1 by introducing 
-> additional features such as dynamic process management, one-sided 
-> communication, paralell I/O, C++ and Fortran 90 bindings. MPI-2 improved the 
-> flexibility and capabilities of MPI programs. 
-> - **MPI-3 (2012):** MPI-3 brought significant enhancements to the MPI standard, 
-> including support for non-blocking collectives, improved multithreading, and 
-> performance optimizations. It also addressed limitations from previous versions and 
-> introduced fully compliant Fortran 2008 bindings. Moreover, MPI-3 completely 
-> removed the deprecated C++ bindings, which were initially marked as deprecated in 
+> - **MPI-2 (1997):** This version expanded upon MPI-1 by introducing
+> additional features such as dynamic process management, one-sided
+> communication, paralell I/O, C++ and Fortran 90 bindings. MPI-2 improved the
+> flexibility and capabilities of MPI programs.
+> - **MPI-3 (2012):** MPI-3 brought significant enhancements to the MPI standard,
+> including support for non-blocking collectives, improved multithreading, and
+> performance optimizations. It also addressed limitations from previous versions and
+> introduced fully compliant Fortran 2008 bindings. Moreover, MPI-3 completely
+> removed the deprecated C++ bindings, which were initially marked as deprecated in
 > MPI-2.2.
-> - **MPI-4.0 (2021):** On June 9, 2021, the MPI Forum approved MPI-4.0, the latest 
-> major release of the MPI standard. MPI-4.0 brings significant updates and new 
-> features, including enhanced support for asynchronous progress, improved support 
-> for dynamic and adaptive applications, and better integration with external 
+> - **MPI-4.0 (2021):** On June 9, 2021, the MPI Forum approved MPI-4.0, the latest
+> major release of the MPI standard. MPI-4.0 brings significant updates and new
+> features, including enhanced support for asynchronous progress, improved support
+> for dynamic and adaptive applications, and better integration with external
 > libraries and programming models.
 >
-> These revisions, along with subsequent updates and errata, have refined the MPI 
+> These revisions, along with subsequent updates and errata, have refined the MPI
 > standard, making it more robust, versatile, and efficient.
-{: .solution} 
+{: .solution}
 Today, various MPI implementations are available, each tailored to specific hardware architectures and systems. Popular implementations like  [MPICH](https://www.mpich.org/), [Intel MPI](https://www.intel.com/content/www/us/en/developer/tools/oneapi/mpi-library.html#gs.0tevpk), [IBM Spectrum MPI](https://www.ibm.com/products/spectrum-mpi), [MVAPICH](https://mvapich.cse.ohio-state.edu/) and [Open MPI](https://www.open-mpi.org/) offer optimized performance, portability, and flexibility. For instance, MPICH is known for its efficient scalability on HPC systems, while Open MPI prioritizes extensive portability and adaptability, providing robust support for multiple operating systems, programming languages, and hardware platforms.
 
 The key concept in MPI is **message passing**, which involves the explicit exchange of data between processes. Processes can send messages to specific destinations, broadcast messages to all processes, or perform collective operations where all processes participate. This message passing and coordination among parallel processes are facilitated through a set of fundamental functions provided by the MPI standard. Typically, their names start with `MPI_` and followed by a specific function or datatype identifier. Here are some examples:
@@ -69,9 +69,9 @@ In general, an MPI program follows a basic outline that includes the following s
 
 ## Getting Started with MPI: MPI on HPC
 
-HPC clusters typically have **more than one version** of MPI available, so you may 
+HPC clusters typically have **more than one version** of MPI available, so you may
 need to tell it which one you want to use before it will give you access to it.
-First check the available MPI implementations/modules on the cluster using the command below: 
+First check the available MPI implementations/modules on the cluster using the command below:
 
 ~~~
  module avail
@@ -79,8 +79,8 @@ First check the available MPI implementations/modules on the cluster using the c
 {: .language-bash}
 
 This will display a list of available modules, including MPI implementations.
-As for the next step, you should choose the appropriate MPI implementation/module from the 
-list based on your requirements and load it using `module load <mpi_module_name>`. For 
+As for the next step, you should choose the appropriate MPI implementation/module from the
+list based on your requirements and load it using `module load <mpi_module_name>`. For
 example, if you want to load OpenMPI version 4.1.4, you can use (for example on COSMA):
 
 ~~~
@@ -96,14 +96,14 @@ module load gnu_comp/13.1.0
 ~~~
 {: .language-bash}
 
-This sets up the necessary environment variables and paths for the MPI implementation and 
-will give you access to the MPI library. If you are not sure which implementation/version 
-of MPI you should use on a particular cluster, ask a helper or consult your HPC 
-facility's  documentation. 
+This sets up the necessary environment variables and paths for the MPI implementation and
+will give you access to the MPI library. If you are not sure which implementation/version
+of MPI you should use on a particular cluster, ask a helper or consult your HPC
+facility's  documentation.
 
 ## Running a code with MPI
 
-Let's start with a simple C code that prints "Hello World!" to the console. Save the 
+Let's start with a simple C code that prints "Hello World!" to the console. Save the
 following code in a file named **`hello_world.c`**
 ~~~
 #include <stdio.h>
@@ -114,18 +114,18 @@ int main (int argc, char *argv[]) {
 ~~~
 {: .language-c}
 
-Although the code is not an MPI program, we can use the command `mpicc` to compile it. The 
-`mpicc` command is essentially a wrapper around the underlying C compiler, such as 
-**gcc**, providing additional functionality for compiling MPI programs. It simplifies the 
-compilation process by incorporating MPI-specific configurations and automatically linking 
-the necessary MPI libraries and header files. Therefore the below command generates an 
-executable file named **hello_world** . 
+Although the code is not an MPI program, we can use the command `mpicc` to compile it. The
+`mpicc` command is essentially a wrapper around the underlying C compiler, such as
+**gcc**, providing additional functionality for compiling MPI programs. It simplifies the
+compilation process by incorporating MPI-specific configurations and automatically linking
+the necessary MPI libraries and header files. Therefore the below command generates an
+executable file named **hello_world** .
 
 ~~~
-mpicc -o hello_world hello_world.c 
+mpicc -o hello_world hello_world.c
 ~~~
 {: .language-bash}
- 
+
 Now let's try the following command:
 ~~~
 mpiexec -n 4 ./hello_world
@@ -136,21 +136,21 @@ mpiexec -n 4 ./hello_world
 >
 > If `mpiexec` is not found, try `mpirun` instead. This is another common name for the command.
 >
-> When launching MPI applications and managing parallel processes, we often rely on commands 
-> like `mpiexec` or `mpirun`. Both commands act as wrappers or launchers for MPI 
-> applications, allowing us to initiate and manage the execution of multiple parallel 
-> processes across nodes in a cluster. While the behavior and features of `mpiexec` and 
-> `mpirun` may vary depending on the MPI implementation being used (such as OpenMPI, MPICH, 
+> When launching MPI applications and managing parallel processes, we often rely on commands
+> like `mpiexec` or `mpirun`. Both commands act as wrappers or launchers for MPI
+> applications, allowing us to initiate and manage the execution of multiple parallel
+> processes across nodes in a cluster. While the behavior and features of `mpiexec` and
+> `mpirun` may vary depending on the MPI implementation being used (such as OpenMPI, MPICH,
 > MS MPI, etc.), they are commonly used interchangeably and provide similar functionality.
 >
-> It is important to note that `mpiexec` is defined as part of the MPI standard, whereas 
-> `mpirun` is not. While some MPI implementations may use one name or the other, or even 
-> provide both as aliases for the same functionality, `mpiexec` is generally considered the 
-> preferred command. Although the MPI standard does not explicitly require MPI 
-> implementations to include `mpiexec`, it does provide guidelines for its implementation. 
-> In contrast, the availability and options of `mpirun` can vary between different MPI 
-> implementations. To ensure compatibility and adherence to the MPI standard, it is 
-> recommended to primarily use `mpiexec` as the command for launching MPI applications and 
+> It is important to note that `mpiexec` is defined as part of the MPI standard, whereas
+> `mpirun` is not. While some MPI implementations may use one name or the other, or even
+> provide both as aliases for the same functionality, `mpiexec` is generally considered the
+> preferred command. Although the MPI standard does not explicitly require MPI
+> implementations to include `mpiexec`, it does provide guidelines for its implementation.
+> In contrast, the availability and options of `mpirun` can vary between different MPI
+> implementations. To ensure compatibility and adherence to the MPI standard, it is
+> recommended to primarily use `mpiexec` as the command for launching MPI applications and
 > managing parallel execution.
 {: .callout}
 
@@ -164,14 +164,14 @@ Hello World!
 ````
 > ## What did `mpiexec` do?
 >
-> Just running a program with `mpiexec` creates several instances of our application. The number 
-> of instances is determined by the `-n` parameter, which specifies the desired number of 
-> processes. These instances are independent and execute different parts of the program 
-> simultaneously. Behind the scenes, `mpiexec` undertakes several critical tasks. It sets up 
-> communication between the processes, enabling them to exchange data and synchronize their 
-> actions. Additionally, `mpiexec` takes responsibility for allocating the instances across the 
-> available hardware resources, deciding where to place each process for optimal performance. It 
-> handles the spawning, killing, and naming of processes, ensuring proper execution and 
+> Just running a program with `mpiexec` creates several instances of our application. The number
+> of instances is determined by the `-n` parameter, which specifies the desired number of
+> processes. These instances are independent and execute different parts of the program
+> simultaneously. Behind the scenes, `mpiexec` undertakes several critical tasks. It sets up
+> communication between the processes, enabling them to exchange data and synchronize their
+> actions. Additionally, `mpiexec` takes responsibility for allocating the instances across the
+> available hardware resources, deciding where to place each process for optimal performance. It
+> handles the spawning, killing, and naming of processes, ensuring proper execution and
 > termination.
 {: .callout}
 
@@ -200,6 +200,21 @@ Both `MPI_Init` and `MPI_Finalize` return an integer.
 This describes errors that may happen in the function.
 Usually we will return the value of `MPI_Finalize` from the main function
 
+> ## I don't use command line arguments
+>
+> If your main function has no arguments, you can instead pass `NULL` for both arguments to `MPI_Init()`.
+>
+> ~~~c
+> int main(void) {
+>     MPI_Init(NULL, NULL);
+>     return MPI_Finalize();
+> }
+> ~~~
+>
+{: .callout}
+
+
+
 After MPI is initialized, you can find out the total number of ranks and the specific rank of the copy:
 
 ~~~
@@ -224,7 +239,7 @@ int main(int argc, char *argv[]) {
 
     // First call MPI_Init
     MPI_Init(&argc, &argv);
-    
+
     // Get total number of ranks and my rank
     MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
@@ -255,7 +270,7 @@ int main(int argc, char *argv[]) {
 > > ~~~
 > > My rank number is 1 out of 4
 > > My rank number is 2 out of 4
-> > My rank number is 3 out of 4 
+> > My rank number is 3 out of 4
 > > My rank number is 0 out of 4
 > > ~~~
 > >  {: .output}
@@ -365,7 +380,7 @@ can perform MPI calls after ``from mpi4py import MPI``.
 
 In practice, such parallel codes may well be executed on a local machine particularly during development. However,
 much greater computational power is often desired to reduce runtimes to tractable levels, by running such codes on
-HPC infrastructures such as DiRAC. These infrastructures make use of batch schedulers, such as Slurm, to manage access 
+HPC infrastructures such as DiRAC. These infrastructures make use of batch schedulers, such as Slurm, to manage access
 to distributed computational resources. So give our simple hello world example, how would we run this on an HPC batch
 scheduler such as Slurm?
 
