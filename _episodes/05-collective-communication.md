@@ -63,8 +63,11 @@ int main(int argc, char** argv) {
 
 For it's use case, the code above works perfectly fine. However, it isn't very efficient when you need to communicate
 large amounts of data, have lots of ranks, or when the workload is uneven (due to the blocking communication). It's also
-a lot of code to do not much, which makes it easy to introduce mistakes in our code. A common mistake in this example
-would be to start the loop over ranks from 0, which would cause a deadlock!
+a lot of code to not do very much, which makes it easy to introduce mistakes in our code. Another mistake in this example
+
+would be to start the loop over ranks from 0, which would cause a deadlock! It's actually quite a common mistake for new
+MPI users to write something like the above.
+
 
 We don't need to write code like this (unless we want *complete* control over the data communication), because MPI has
 access to collective communication functions to abstract all of this code for us. The above code can be replaced by a
