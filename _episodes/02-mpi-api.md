@@ -108,7 +108,7 @@ following code in a file named **`hello_world.c`**
 ~~~
 #include <stdio.h>
 
-int main (int argc, char *argv[]) {
+int main(int argc, char **argv) {
     printf("Hello World!\n");
 }
 ~~~
@@ -235,7 +235,7 @@ Here's a more complete example:
 #include <stdio.h>
 #include <mpi.h>
 
-int main(int argc, char *argv[]) {
+int main(int argc, char **argv) {
     int num_ranks, my_rank;
 
     // First call MPI_Init
@@ -322,8 +322,9 @@ number of iterations. This ensures the entire desired workload is calculated:
 
 ~~~
 // catch cases where the work can't be split evenly
-if (rank_end > NUM_ITERATIONS || (my_rank == (num_ranks-1) && rank_end < NUM_ITERATIONS))
+if (rank_end > NUM_ITERATIONS || (my_rank == (num_ranks-1) && rank_end < NUM_ITERATIONS)) {
     rank_end = NUM_ITERATIONS;
+}
 ~~~
 {: .language-c}
 
@@ -334,11 +335,12 @@ subset of the problem, and output the result, e.g.:
 // each rank is dealing with a subset of the problem between rank_start and rank_end
 int prime_count = 0;
 for (int n = rank_start; n <= rank_end; ++n) {
-    bool is_prime = true;
+    bool is_prime = true;  // remember to include <stdbool.h>
 
     // 0 and 1 are not prime numbers
-    if (n == 0 || n == 1)
+    if (n == 0 || n == 1) {
         is_prime = false;
+    }
 
     // if we can only divide n by i, then n is not prime
     for (int i = 2; i <= n / 2; ++i) {
@@ -348,8 +350,9 @@ for (int n = rank_start; n <= rank_end; ++n) {
         }
     }
 
-    if (is_prime)
+    if (is_prime) {
         prime_count++;
+    }
 }
 printf("Rank %d - primes between %d-%d is: %d\n", my_rank, rank_start, rank_end, prime_count);
 ~~~

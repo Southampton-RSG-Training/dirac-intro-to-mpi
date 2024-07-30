@@ -184,8 +184,8 @@ application, the ranks will belong to the default communicator known as `MPI_COM
 episodes when, for example, we've used functions like `MPI_Comm_rank()` to get the rank number,
 
 ```c
-int my_rank;
-MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);  /* MPI_COMM_WORLD is the communicator the rank belongs to */
+// Find the rank in the global MPI_COMM_WORLD communicator
+MPI_Comm_rank(MPI_COMM_WORLD, &my_global_rank);
 ```
 
 In addition to `MPI_COMM_WORLD`, we can make sub-communicators and distribute ranks into them. Messages can only be
@@ -266,10 +266,10 @@ only uses these expressions as arguments in MPI functions.
 > you ever do need to change the type, you would only have to do it in one place.
 >
 > ```c
-> /* define constants for your data types */
+> // Define constants for your data types
 > #define MPI_INT_TYPE MPI_INT
 > #define INT_TYPE int
-> /* use them as you would normally */
+> // Use them as you may normally
 > INT_TYPE my_int = 1;
 > ```
 >

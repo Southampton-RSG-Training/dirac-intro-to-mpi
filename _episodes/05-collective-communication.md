@@ -23,7 +23,7 @@ to calculate the sum of the rank numbers - feel free to try it out!
 #include <stdio.h>
 #include <mpi.h>
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     int my_rank, num_ranks;
 
     // First call MPI_Init
@@ -35,21 +35,21 @@ int main(int argc, char** argv) {
     int sum;
     MPI_Status status;
 
-    /* Rank 0 is the "root" rank, where we'll receive data and sum it up */
+    // Rank 0 is the "root" rank, where we'll receive data and sum it up
     if (my_rank == 0) {
         sum = my_rank;
 
-        /* Start by receiving the rank number from every rank, other than itself */
+        // Start by receiving the rank number from every rank, other than itself
         for (int i = 1; i < num_ranks; ++i) {
             int recv_num;
             MPI_Recv(&recv_num, 1, MPI_INT, i, 0, MPI_COMM_WORLD, &status);
-            sum += recv_num;  /* Increment sum */
+            sum += recv_num;
         }
-        /* Now sum has been calculated, send it back to every rank other than the root */
+        // Now sum has been calculated, send it back to every rank other than the root
         for (int i = 1; i < num_ranks; ++i) {
             MPI_Send(&sum, 1, MPI_INT, i, 0, MPI_COMM_WORLD);
         }
-    } else {  /* All other ranks will send their rank number and receive sum */
+    } else {  // All other ranks will send their rank number and receive sum */
         MPI_Send(&my_rank, 1, MPI_INT, 0, 0, MPI_COMM_WORLD);
         MPI_Recv(&sum, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, &status);
     }
@@ -91,9 +91,11 @@ use the `MPI_Barrier()` function,
 
 ```c
 int MPI_Barrier(
-    MPI_Comm communicator  /* The communicator we want to add a barrier for */
+    MPI_Comm comm
 );
 ```
+
+| `comm`: | The communicator to add a barrier to |
 
 When a rank reaches a barrier, it will pause and wait for all the other ranks to catch up and reach the barrier as well.
 As ranks waiting at a barrier aren't doing anything, barriers should be used sparingly to avoid large synchronisation
@@ -126,15 +128,21 @@ function has the following arguments,
 
 ```c
 int MPI_Bcast(
-    void* data,             /* The data to be sent to all ranks */
-    int count,              /* The number of elements of data */
-    MPI_Datatype datatype,  /* The data type of the data */
-    int root,               /* The rank which the data should be sent from */
-    MPI_Comm comm           /* The communicator containing the ranks to broadcast to */
+    void *data,
+    int count,
+    MPI_Datatype datatype,
+    int root,
+    MPI_Comm comm
 );
 ```
 
-`MPI_Bcast()` is similar to the `MPI_Send()` function. The meain functional difference is that `MPI_Bcast()` sends
+| `data`: | The data to be sent to all ranks |
+| `count`: | The number of elements of data |
+| `datatype`: | The datatype of the data |
+| `root`: | The rank which data will be sent from |
+| `comm:` | The communicator containing the ranks to broadcast to |
+
+`MPI_Bcast()` is similar to the `MPI_Send()` function, but `MPI_Bcast()` sends
 the data to all ranks (other than itself, where the data already is) instead of a single rank, as shown in the
 diagram below.
 
@@ -186,7 +194,6 @@ MPI_Bcast(data_from_file, NUM_POINTS, MPI_INT, 0, MPI_COMM_WORLD);
 > >     }
 > >
 > >     MPI_Bcast(message, NUM_CHARS, MPI_CHAR, 0, MPI_COMM_WORLD);
-> >
 > >     printf("I'm rank %d and I got the message '%s'\n", my_rank, message);
 > >
 > >     return MPI_Finalize();
@@ -211,16 +218,25 @@ a diferent chunk to each rank, as shown in the diagram below.
 
 ```c
 int MPI_Scatter(
-    void* sendbuf,          /* The data to be split across ranks (only important for the root rank) */
-    int sendcount,          /* The number of elements of data to send to each rank (only important for the root rank) */
-    MPI_Datatype sendtype,  /* The data type of the data being sent (only important for the root rank) */
-    void* recvbuffer,       /* A buffer to receive the data, including the root rank */
-    int recvcount,          /* The number of elements of data to receive, usually the same as sendcount */
-    MPI_Datatype recvtype,  /* The data types of the data being received, usually the same as sendtype */
-    int root,               /* The ID of the rank where data is being "scattered" from */
-    MPI_Comm comm           /* The communicator involved */
+    void *sendbuf,
+    int sendcount,
+    MPI_Datatype sendtype,
+    void *recvbuffer,
+    int recvcount,
+    MPI_Datatype recvtype,
+    int root,
+    MPI_Comm comm
 );
 ```
+
+| `*sendbuf`: | The data to be scattered across ranks (only important for the root rank) |
+| `sendcount`: | The number of elements of data to send to each root rank (only important for the root rank) |
+| `sendtype`: | The data type of the data being sent (only important for the root rank) |
+| `*recvbuffer`: | A buffer to receive data into, including the root rank |
+| `recvcount`: | Th number of elements of data to receive. Usually the same as `sendcount` |
+| `recvtype`: | The data type of the data being received. Usually the same as `sendtype` |
+| `root`: | The rank data is being scattered from |
+| `comm`: | The communicator |
 
 The data to be *scattered* is split into even chunks of size `sendcount`. If `sendcount` is 2 and `sendtype` is
 `MPI_INT`, then each rank will receive two integers. The values for `recvcount` and `recvtype` are the same as
@@ -254,20 +270,29 @@ MPI_Scatter(send_data, num_per_rank, MPI_INT, scattered_data_for_rank, num_per_r
 ### Gather
 
 The opposite of scattering from one rank to multiple, is to gather data from multiple ranks into a single rank. We can
-do this by using the collection function `MPI_Gather()`, which has tue arguments,
+do this by using the collection function `MPI_Gather()`, which has the arguments,
 
 ```c
 int MPI_Gather(
-    void* sendbuf,          /* The data to be sent to the root rank */
-    int sendcount,          /* The number of elements of data to be sent */
-    MPI_Datatype sendtype,  /* The data type of the data to be sent */
-    void* recvbuffer,       /* The buffer to put the gathered data into (only important for the root rank) */
-    int recvcount,          /* Same as sendcount (only important for the root rank) */
-    MPI_Datatype recvtype,  /* Same as sendtype (import important for the root rank) */
-    int root,               /* The ID of the root rank, where data is being gathered to */
-    MPI_Comm comm           /* The communicator involved */
+    void *sendbuf,
+    int sendcount,
+    MPI_Datatype sendtype,
+    void *recvbuff,
+    int recvcount,
+    MPI_Datatype recvtype,
+    int root,
+    MPI_Comm comm
 );
 ```
+
+| `*sendbuff`: | The data to send to the root rank |
+| `sendcount`: | The number of elements of data to send |
+| `sendtype`: | The data type of the data being sent |
+| `recvbuff`: | The buffer to put gathered data into (only important for the root rank) |
+| `recvcount`: | The number of elements being received, usually the same as `sendcount` |
+| `recvtype`: | The data type of the data being received, usually the same as `sendtype` |
+| `root`: | The root rank, where data will be gathered to |
+| `comm`: | The communicator |
 
 The receive buffer needs to be large enough to hold data data from all of the ranks. For example, if there are 4 ranks
 sending 10 integers, then `recvbuffer` needs to be able to store *at least* 40 integers. We can think of `MPI_Gather()`
@@ -327,7 +352,7 @@ MPI_Gather(rank_data, NUM_DATA_POINTS, MPI_INT, gathered_data, NUM_DATA_POINTS, 
 > >     MPI_Gather(message, NUM_CHARS, MPI_CHAR, recv_buffer, NUM_CHARS, MPI_CHAR, 0, MPI_COMM_WORLD);
 > >
 > >     if (my_rank == 0) {
-> >         for (int i = 0; i < num_ranks; ++i) { /* snprintf null terminates strings */
+> >         for (int i = 0; i < num_ranks; ++i) { // snprintf null terminates strings
 > >             printf("%s\n", &recv_buffer[i * NUM_CHARS]);
 > >         }
 > >     }
@@ -351,15 +376,23 @@ can be done using the collection function `MPI_Reduce()`, which has the followin
 
 ```c
 int MPI_Reduce(
-    void* sendbuf,          /* The data to be reduced on the root rank */
-    void* recvbuffer,       /* The buffer which will contain the reduction output */
-    int count,              /* The number of elements of data to be reduced */
-    MPI_Datatype datatype,  /* The data type of the data */
-    MPI_Op op,              /* The reduction operation to perform */
-    int root,               /* The root rank, to perform the reduction on */
-    MPI_Comm comm           /* The communicator where the reduction will be performed */
+    void *sendbuf,
+    void *recvbuffer,
+    int count,
+    MPI_Datatype datatype,
+    MPI_Op op,
+    int root,
+    MPI_Comm comm
 );
 ```
+
+| `*sendbuf`: | The data to be reduced by the root rank |
+| `*recvbuf`: | A buffer to contain the reduction output |
+| `count`: | The number of elements of data to be reduced |
+| `datatype`: | The data type of the data |
+| `op`: | The reduction operation to perform |
+| `root`: |  The root rank, which will perform the reduction |
+| `comm`: | The communicator |
 
 The `op` argument controls which reduction operation is carried out, from the following possible operations:
 
@@ -381,9 +414,9 @@ done on the root rank, it means the reduced value is only available on the root 
 By using `MPI_Reduce()` and `MPI_Bcast()`, we can refactor the first code example into two collective functions,
 
 ```c
-int sum;
 MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
 
+int sum;
 MPI_Reduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, 0, MPI_COMM_WORLD);
 MPI_Bcast(&sum, 1, MPI_INT, 0, MPI_COMM_WORLD);  /* Using MPI_Bcast to send the reduced value to every rank */
 ```
@@ -398,14 +431,21 @@ single function call,
 
 ```c
 int MPI_Allreduce(
-    void* sendbuf,          /* The data to be reduced */
-    void* recvbuffer,       /* The buffer which will contain the reduction output */
+    void *sendbuf,          /* The data to be reduced */
+    void *recvbuffer,       /* The buffer which will contain the reduction output */
     int count,              /* The number of elements of data to be reduced */
     MPI_Datatype datatype,  /* The data type of the data */
     MPI_Op op,              /* The reduction operation to use */
     MPI_Comm comm           /* The communicator where the reduction will be performed */
 );
 ```
+
+| `*sendbuf`: | The data to be reduced, on all ranks |
+| `*recvbuf`: | A buffer which will contain the reduction output |
+| `count`: | The number of elements of data to be reduced |
+| `datatype`: | The data type of the data |
+| `op`: | The reduction operation to use |
+| `comm`: | The communicator |
 
 ![Each rank sending a piece of data to root rank](fig/allreduce.png)
 
@@ -457,27 +497,26 @@ MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 > #include <mpi.h>
 >
 > // Calculate the sum of numbers in a vector
-> double find_sum( double * vector, int N ){
+> double find_sum(double * vector, int N) {
 >    double sum = 0;
->    for( int i=0; i<N; i++){
+>    for (int i = 0; i < N; ++i){
 >       sum += vector[i];
 >    }
 >    return sum;
 > }
 >
 > // Find the maximum of numbers in a vector
-> double find_maximum( double * vector, int N ){
+> double find_maximum(double *vector, int N) {
 >    double max = 0;
->    for( int i=0; i<N; i++){
->       if( vector[i] > max ){
+>    for (int i = 0; i < N; ++i){
+>       if (vector[i] > max){
 >          max = vector[i];
 >       }
 >    }
 >    return max;
 > }
 >
->
-> int main(int argc, char** argv) {
+> int main(int argc, char **argv) {
 >    int n_numbers = 1024;
 >    int rank;
 >    double vector[n_numbers];
@@ -495,7 +534,7 @@ MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 >    my_first_number = n_numbers*rank;
 >
 >    // Generate a vector
->    for( int i=0; i<n_numbers; i++){
+>    for (int  i = 0; i < n_numbers; ++i) {
 >       vector[i] = my_first_number + i;
 >    }
 >
@@ -516,35 +555,35 @@ MPI_Allreduce(&my_rank, &sum, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
 > >
 > > ```c
 > > // Calculate the sum of numbers in a vector
-> > double find_sum( double * vector, int N ){
+> > double find_sum(double *vector, int N) {
 > >    double sum = 0;
 > >    double global_sum;
 > >
 > >    // Calculate the sum on this rank as before
-> >    for( int i=0; i<N; i++){
+> >    for (int i = 0; i < N; ++i){
 > >       sum += vector[i];
 > >    }
 > >
 > >    // Call MPI_Allreduce to find the full sum
-> >    MPI_Allreduce( &sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD );
+> >    MPI_Allreduce(&sum, &global_sum, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 > >
 > >    return global_sum;
 > > }
 > >
 > > // Find the maximum of numbers in a vector
-> > double find_maximum( double * vector, int N ){
+> > double find_maximum(double *vector, int N) {
 > >    double max = 0;
 > >    double global_max;
 > >
 > >    // Calculate the sum on this rank as before
-> >    for( int i=0; i<N; i++){
-> >       if( vector[i] > max ){
+> >    for (int i = 0; i < N; ++i){
+> >       if (vector[i] > max){
 > >          max = vector[i];
 > >       }
 > >    }
 > >
 > >    // Call MPI_Allreduce to find the maximum over all the ranks
-> >    MPI_Allreduce( &max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD );
+> >    MPI_Allreduce(&max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD);
 > >
 > >    return global_max;
 > > }

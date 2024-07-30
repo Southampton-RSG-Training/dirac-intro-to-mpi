@@ -59,28 +59,28 @@ matrix B. To split the calculation across ranks, one approach would be to *scatt
 result for that scattered data and to combine the results from each rank to get the full result.
 
 ```c
-/* Determine how many rows each matrix will compute and allocate space for a receive buffer
-   receive scattered subsets from root rank. We'll use 1D arrays to store the matrices, as it
-   makes life easier when using scatter and gather */
+// Determine how many rows each matrix will compute and allocate space for a receive buffer
+// receive scattered subsets from root rank. We'll use 1D arrays to store the matrices, as it
+// makes life easier when using scatter and gather
 int rows_per_rank = num_rows_a / num_ranks;
 double *rank_matrix_a = malloc(rows_per_rank * num_rows_a * sizeof(double));
 double *rank_matrix_result = malloc(rows_per_rank * num_cols_b * sizeof(double));
 
-/* Scatter matrix_a across ranks into rank_matrix_a. Each rank will compute a subset of
-   the result for the rows in rank_matrix_a */
+// Scatter matrix_a across ranks into rank_matrix_a. Each rank will compute a subset of
+//  the result for the rows in rank_matrix_a
 MPI_Scatter(matrix_a, rows_per_rank * num_cols_a, MPI_DOUBLE, rank_matrix_a, rows_per_rank * num_cols_a,
             MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
 
-/* Broadcast matrix_b to all ranks, because matrix_b was only created on the root rank
-   and each sub-calculation needs to know all elements in matrix_b */
+// Broadcast matrix_b to all ranks, because matrix_b was only created on the root rank
+// and each sub-calculation needs to know all elements in matrix_b
 MPI_Bcast(matrix_b, num_rows_b * num_cols_b, MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
 
-/* Function to compute result for the subset of rows of matrix_a */
+// Function to compute result for the subset of rows of matrix_a
 multiply_matrices(rank_matrix_a, matrix_b, rank_matrix_result);
 
-/* Use gather communication to get each rank's result for rank_matrix_a * matrix_b into receive
-   buffer `matrix_result`. Our life is made easier since rank_matrix and matrix_result are flat (and contiguous)
-   arrays, so we don't need to worry about memory layout*/
+// Use gather communication to get each rank's result for rank_matrix_a * matrix_b into receive
+// buffer `matrix_result`. Our life is made easier since rank_matrix and matrix_result are flat (and contiguous)
+// arrays, so we don't need to worry about memory layout
 MPI_Gather(rank_matrix_result, rows_per_rank * num_cols_b, MPI_DOUBLE, matrix_result, rows_per_rank * num_cols_b,
            MPI_DOUBLE, ROOT_RANK, MPI_COMM_WORLD);
 ```
@@ -106,36 +106,36 @@ reduction. To parallelise the problem, each rank generates a sub-set of the tota
 done at the end, to calculate the total number of points within the circle from the entire sample.
 
 ```c
-/* 1 billion points is a lot, so we should parallelise this calculation */
+// 1 billion points is a lot, so we should parallelise this calculation
 int total_num_points = (int)1e9;
 
-/* Each rank will check an equal number of points, with their own
-   counter to track the number of points falling within the circle */
+// Each rank will check an equal number of points, with their own
+// counter to track the number of points falling within the circle
 int points_per_rank = total_num_points / num_ranks;
 int rank_points_in_circle = 0;
 
-/* Seed each rank's RNG with a unique seed, otherwise each rank will have an
-   identical result and it would be the same as using `points_per_rank` in total
-   rather than `total_num_points` */
+// Seed each rank's RNG with a unique seed, otherwise each rank will have an
+// identical result and it would be the same as using `points_per_rank` in total
+// rather than `total_num_points`
 srand(time(NULL) + my_rank);
 
-/* Generate a random x and y coordinate (between 0 - 1) and check to see if that
-   point lies within the unit circle */
+// Generate a random x and y coordinate (between 0 - 1) and check to see if that
+// point lies within the unit circle
 for (int i = 0; i < points_per_rank; ++i) {
     double x = (double)rand() / RAND_MAX;
     double y = (double)rand() / RAND_MAX;
-    if (x * x + y * y <= 1.0) {
-        rank_points_in_circle++;  /* It's in the circle, so increment the counter */
+    if ((x * x) + (y * y) <= 1.0) {
+        rank_points_in_circle++;  // It's in the circle, so increment the counter
     }
 }
 
-/* Perform a reduction to sum up `rank_points_in_circle` across all ranks, this
-   will be the total number of points in a circle for `total_num_point` iterations */
+// Perform a reduction to sum up `rank_points_in_circle` across all ranks, this
+// will be the total number of points in a circle for `total_num_point` iterations
 int total_points_in_circle;
 MPI_Reduce(&rank_points_in_circle, &total_points_in_circle, 1, MPI_INT, MPI_SUM, ROOT_RANK, MPI_COMM_WORLD);
 
-/* The estimate for π is proportional to the ratio of the points in the circle and the number of
-   points generated */
+//The estimate for π is proportional to the ratio of the points in the circle and the number of
+// points generated
 if (my_rank == ROOT_RANK) {
     double pi = 4.0 * total_points_in_circle / total_num_points;
     printf("Estimated value of π = %f\n", pi);
@@ -205,17 +205,17 @@ An example of 2D domain decomposition is shown in the next example, which uses a
 episode) to discretise the image into smaller rectangles and to scatter the smaller sub-domains to the other ranks.
 
 ```c
-/* We have to first calculate the size of each rectangular region. In this example, we have
-   assumed that the dimensions are perfectly divisible. We can determine the dimensions for the
-   decomposition by using MPI_Dims_create() */
+// We have to first calculate the size of each rectangular region. In this example, we have
+// assumed that the dimensions are perfectly divisible. We can determine the dimensions for the
+// decomposition by using MPI_Dims_create()
 int rank_dims[2] = { 0, 0 };
 MPI_Dims_create(num_ranks, 2, rank_dims);
 int num_rows_per_rank = num_rows / rank_dims[0];
 int num_cols_per_rank = num_cols / rank_dims[1];
 int num_elements_per_rank = num_rows_per_rank * num_cols_per_rank;
 
-/* The rectangular blocks we create are not contiguous in memory, so we have to use a
-   derived data type for communication */
+// The rectangular blocks we create are not contiguous in memory, so we have to use a
+// derived data type for communication
 MPI_Datatype sub_array_t;
 int count = num_rows_per_rank;
 int blocklength = num_cols_per_rank;
@@ -223,8 +223,8 @@ int stride = num_cols;
 MPI_Type_vector(count, blocklength, stride, MPI_DOUBLE, &sub_array_t);
 MPI_Type_commit(&sub_array_t);
 
-/* MPI_Scatter (and similar collective functions) do not work well with this sort of
-   topology, so we unfortunately have to scatter the array manually */
+// MPI_Scatter (and similar collective functions) do not work well with this sort of
+// topology, so we unfortunately have to scatter the array manually
 double *rank_image = malloc(num_elements_per_rank * sizeof(double));
 scatter_sub_arrays_to_other_ranks(image, rank_image, sub_array_t, rank_dims, my_rank, num_rows_per_rank,
                                   num_cols_per_rank, num_elements_per_rank, num_cols);
@@ -237,10 +237,10 @@ scatter_sub_arrays_to_other_ranks(image, rank_image, sub_array_t, rank_dims, my_
 > of how can be done is shown below.
 >
 > ```c
-> /* Function to convert row and col coordinates into an index for a 1d array */
+> // Function to convert row and col coordinates into an index for a 1d array
 > int index_into_2d(int row, int col, int num_cols) { return row * num_cols + col; }
 >
-> /* Fairly complex function to send sub-arrays of `image` to the other ranks */
+> // Fairly complex function to send sub-arrays of `image` to the other ranks
 > void scatter_sub_arrays_to_other_ranks(double *image, double *rank_image, MPI_Datatype sub_array_t, int rank_dims[2],
 >                                        int my_rank, int num_cols_per_rank, int num_rows_per_rank,
 >                                        int num_elements_per_rank, int num_cols)
@@ -249,11 +249,11 @@ scatter_sub_arrays_to_other_ranks(image, rank_image, sub_array_t, rank_dims, my_
 >       int dest_rank = 0;
 >       for (int i = 0; i < rank_dims[0]) {
 >          for (int j = 0; j < rank_dims[1]) {
->             /* Send sub array to a non-root rank */
+>             // Send sub array to a non-root rank
 >             if(dest_rank != ROOT_RANK) {
 >                MPI_Send(&image[index_into_2d(num_rows_per_rank * i, num_cols_per_rank * j, num_cols)], 1, sub_array_t,
 >                         dest_rank, 0, MPI_COMM_WORLD);
->             /* Copy into root rank's rank image buffer */
+>             // Copy into root rank's rank image buffer
 >             } else {
 >               for (int ii = 0; ii < num_rows_per_rank; ++ii) {
 >                   for (int jj = 0; jj < num_cols_per_rank; ++jj) {
@@ -320,44 +320,57 @@ between neighbouring ranks.
 >
 > ```c
 > int MPI_Sendrecv(
->    void *sendbuf,          /* The data to be sent to `dest` */
->    int sendcount,          /* The number of elements of data to send to `dest` */
->    MPI_Datatype sendtype,  /* The data type of the data being sent */
->    int dest,               /* The rank where data is being sent to */
->    int sendtag,            /* The send tag */
->    void *recvbuf,          /* The buffer into which received data will be put into from `source` */
->    int recvcount,          /* The number of elements of data to receive from `source` */
->    MPI_Datatype recvtype,  /* The data type of the data being received */
->    int source,             /* The rank where data is coming from */
->    int recvtag,            /* The receive tag */
->    MPI_Comm comm,          /* The communicator containing the ranks */
->    MPI_Status *status      /* The status for the receive operation */
+>    void *sendbuf,
+>    int sendcount,
+>    MPI_Datatype sendtype,
+>    int dest,
+>    int sendtag,
+>    void *recvbuf,
+>    int recvcount,
+>    MPI_Datatype recvtype,
+>    int source,
+>    int recvtag,
+>    MPI_Comm comm,
+>    MPI_Status *status
 > );
 > ```
+>
+> | `*sendbuf`: | The data to be sent to `dest` |
+> | `sendcount`: | The number of elements of data to be sent to `dest` |
+> | `sendtype`: | The data type of the data to be sent to `dest` |
+> | `dest`: | The rank where data is being sent to |
+> | `sendtag`: | The communication tag for the send |
+> | `*recvbuf`: | A buffer for data being received |
+> | `recvcount`: | The number of elements of data to receive |
+> | `recvtype`: | The data type of the data being received |
+> | `source`: | The rank where data is coming from |
+> | `recvtag`: | The communication tag for the receive |
+> | `comm`: | The communicator |
+> | `*status`: | The status handle for the receive |
 >
 {: .hidden-callout}
 
 ```c
-/* Function to convert row and col coordinates into an index for a 1d array */
+// Function to convert row and col coordinates into an index for a 1d array
 int index_into_2d(int row, int col, int num_cols) { return row * num_cols + col; }
 
-/* `rank_image` is actually a little bigger, as we need two extra rows for a halo region for the top
-    and bottom of the row sub-domain */
+// `rank_image` is actually a little bigger, as we need two extra rows for a halo region for the top
+//  and bottom of the row sub-domain
 double *rank_image = malloc((num_rows + 2) * num_cols * sizeof(double));
 
-/* MPI_Sendrecv is designed for "chain" communications, so we need to figure out the next
-   and previous rank. We use `MPI_PROC_NULL` (a special constant) to tell MPI that we don't
-   have a partner to communicate to/receive from */
+// MPI_Sendrecv is designed for "chain" communications, so we need to figure out the next
+// and previous rank. We use `MPI_PROC_NULL` (a special constant) to tell MPI that we don't
+// have a partner to communicate to/receive from
 int prev_rank = my_rank - 1 < 0 ? MPI_PROC_NULL : my_rank - 1;
 int next_rank = my_rank + 1 > num_ranks - 1 ? MPI_PROC_NULL : my_rank + 1;
 
-/* Send the top row of the image to the bottom row of the previous rank, and receive
-   the top row from the next rank */
+// Send the top row of the image to the bottom row of the previous rank, and receive
+// the top row from the next rank
 MPI_Sendrecv(&rank_image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0,
              &rank_image[index_into_2d(num_rows - 1, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
              MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-/* Send the bottom row into top row of the next rank, and the reverse from the previous rank */
+// Send the bottom row into top row of the next rank, and the reverse from the previous rank
 MPI_Sendrecv(&rank_image[index_into_2d(num_rows - 2, 1, num_cols)], num_rows, MPI_DOUBLE, next_rank, 0,
              &rank_image[index_into_2d(0, 1, num_cols)], num_rows, MPI_DOUBLE, prev_rank, 0, MPI_COMM_WORLD,
              MPI_STATUS_IGNORE);

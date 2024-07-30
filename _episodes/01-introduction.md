@@ -202,7 +202,7 @@ Now, let's take a brief look at these fundamental concepts and explore the diffe
 > |Creation of process/thread instances and communication can result in higher costs and overhead.|Offers lower overhead, as inter-process communication is handled through shared memory, reducing the need for expensive process/thread creation.|
 {: .callout}
 
-## Parallel Paradigms 
+## Parallel Paradigms
 
 Thinking back to shared vs distributed memory models, how to achieve a parallel computation
 is divided roughly into **two paradigms**. Let's set both of these in context:
@@ -226,7 +226,7 @@ kind of problems you have. Sometimes, one has to use both!
 Consider a simple loop which can be sped up if we have many cores for illustration:
 
 ~~~
-for(i=0; i<N; i++) {
+for (i = 0; i < N; ++i) {
   a[i] = b[i] + c[i];
 }
 ~~~
@@ -239,11 +239,11 @@ just one step (for a factor of $$N$$ speed-up). Let's look into both paradigms i
 >{: .checklist}
 > One standard method for programming using data parallelism is called
 > "OpenMP" (for "**O**pen **M**ulti**P**rocessing").
-> To understand what data parallelism means, let's consider the following bit of OpenMP code which 
+> To understand what data parallelism means, let's consider the following bit of OpenMP code which
 > parallelizes the above loop:
 > ~~~
 > #pragma omp parallel for
-> for(i=0; i<N; i++) {
+> for (i = 0; i < N; ++i) {
 >   a[i] = b[i] + c[i];
 > }
 > ~~~
@@ -268,7 +268,7 @@ just one step (for a factor of $$N$$ speed-up). Let's look into both paradigms i
 > data.  For example, using this paradigm to parallelise the above loop instead:
 >
 > ~~~
-> for(i=0; i<m; i++) {
+> for ( i = 0; i < m; ++i) {
 >   a[i] = b[i] + c[i];
 > }
 > ~~~
@@ -288,10 +288,10 @@ just one step (for a factor of $$N$$ speed-up). Let's look into both paradigms i
 >
 > <img src="fig/dataparallel.png" alt="Each rank has its own data"/>
 > Therefore, each rank essentially operates on its own set of data, regardless of paradigm.
-> In some cases, there are advantages to combining data parallelism and message passing methods 
-> together, e.g. when there are problems larger than one GPU can handle. In this case, _data 
-> parallelism_ is used for the portion of the problem contained within one GPU, and then _message 
-> passing_ is used to employ several GPUs (each GPU handles a part of the problem) unless special 
+> In some cases, there are advantages to combining data parallelism and message passing methods
+> together, e.g. when there are problems larger than one GPU can handle. In this case, _data
+> parallelism_ is used for the portion of the problem contained within one GPU, and then _message
+> passing_ is used to employ several GPUs (each GPU handles a part of the problem) unless special
 > hardware/software supports multiple GPU usage.
 {: .callout}
 
@@ -441,13 +441,13 @@ decompose the domain so that many cores can work in parallel.
 >
 >> ## Solution
 >>
->> 
+>>
 >> First Loop: Each iteration depends on the results of the previous two iterations in vector_1. So it is not parallelisable within itself.
 >>
 >> Second Loop: Each iteration is independent and can be parallelised.
 >>
->> Third loop: Each iteration is independent within itself. While there are dependencies on vector_2[i] and vector_1[i], these dependencies are local to each iteration. This independence 
->> allows for the potential parallelization of the third loop by overlapping its execution with the second loop, assuming the results of the first loop are available or can be made 
+>> Third loop: Each iteration is independent within itself. While there are dependencies on vector_2[i] and vector_1[i], these dependencies are local to each iteration. This independence
+>> allows for the potential parallelization of the third loop by overlapping its execution with the second loop, assuming the results of the first loop are available or can be made
 >> available dynamically.
 >>
 >> ~~~
