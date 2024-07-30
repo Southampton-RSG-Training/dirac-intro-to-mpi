@@ -44,7 +44,7 @@ We'll begin by looking at the `main()` function at a high level.
 
 ...
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
 
   // The heat energy in each block
   float *u, *unew, *rho;
@@ -76,11 +76,11 @@ The next step is to initialise the initial conditions of the simulation:
 ~~~
   // Set up parameters
   h = 0.1;
-  hsq = h*h;
+  hsq = h * h;
   residual = 1e-5;
 
   // Initialise the u and rho field to 0
-  for (i = 0; i <= GRIDSIZE+1; i++) {
+  for (i = 0; i <= GRIDSIZE + 1; ++i) {
     u[i] = 0.0;
     rho[i] = 0.0;
   }
@@ -91,7 +91,7 @@ The next step is to initialise the initial conditions of the simulation:
 ~~~
 {: .language-c}
 
-`residual` here refers to the threshold of temperature equilibrium along the stick we wish to achieve. Once it's within this threshold, the simulation will end. 
+`residual` here refers to the threshold of temperature equilibrium along the stick we wish to achieve. Once it's within this threshold, the simulation will end.
 Note that initially, `u` is set entirely to zero, representing a temperature of zero along the length of the stick.
 As noted, `rho` is set to zero here for simplicity.
 
@@ -102,9 +102,11 @@ Next, the code iteratively calls `poisson_step()` to calculate the next set of r
 ~~~
   // Run iterations until the field reaches an equilibrium
   // and no longer changes
-  for (i = 0; i < NUM_ITERATIONS; i++) {
+  for (i = 0; i < NUM_ITERATIONS; ++i) {
     unorm = poisson_step(u, unew, rho, hsq, GRIDSIZE);
-    if (sqrt(unorm) < sqrt(residual)) break;
+    if (sqrt(unorm) < sqrt(residual)) {
+      break;
+    }
   }
 ~~~
 {: .language-c}
@@ -113,7 +115,7 @@ Finally, just for show, the code outputs a representation of the result - the en
 
 ~~~
   printf("Final result:\n");
-  for (int j = 1; j <= GRIDSIZE; j++) {
+  for (int j = 1; j <= GRIDSIZE; ++j) {
     printf("%d-", (int) u[j]);
   }
   printf("\n");
@@ -127,9 +129,9 @@ Finally, just for show, the code outputs a representation of the result - the en
 The `poisson_step()` progresses the simulation by a single step. After it accepts its arguments, for each slice in the stick it calculates a new value based on the temperatures of its neighbours:
 
 ~~~
-  for (int i = 1; i <= points; i++) {
+  for (int i = 1; i <= points; ++i) {
      float difference = u[i-1] + u[i+1];
-     unew[i] = 0.5 * (difference - hsq*rho[i]);
+     unew[i] = 0.5 * (difference - hsq * rho[i]);
   }
 ~~~
 {: .language-c}
@@ -138,9 +140,9 @@ Next, it calculates a value representing the overall cumulative change in temper
 
 ~~~
   unorm = 0.0;
-  for (int i = 1;i <= points; i++) {
-     float diff = unew[i]-u[i];
-     unorm += diff*diff;
+  for (int i = 1; i <= points; ++i) {
+     float diff = unew[i] - u[i];
+     unorm += diff * diff;
   }
 ~~~
 {: .language-c}
@@ -149,7 +151,7 @@ And finally, the state of the stick is set to the newly calculated values, and `
 
 ~~~
   // Overwrite u with the new field
-  for (int i = 1;i <= points;i++) {
+  for (int i = 1 ;i <= points; ++i) {
      u[i] = unew[i];
   }
 
@@ -180,7 +182,6 @@ Run completed in 182 iterations with residue 9.60328e-06
 Here, we can see a basic representation of the temperature of each slice of the stick at the end of the simulation, and how the initial `10.0` temperature applied at the beginning of the stick has transferred along it to this final state.
 Ordinarily, we might output the full sequence to a file, but we've simplified it for convenience here.
 
-
 ## Approaching Parallelism
 
 So how should we make use of an MPI approach to parallelise this code?
@@ -207,7 +208,7 @@ The next step is to consider in more detail this approach to parallelism with ou
 >> ## Solution
 >>
 >> Potentially, the following regions could be executed in parallel:
->> 
+>>
 >> * The setup, when initialising the fields
 >> * The calculation of each time step, `unew` - this is the most computationally intensive of the loops
 >> * Calculation of the cumulative temperature difference, `unorm`
@@ -230,15 +231,15 @@ If the serial parts are a significant part of the algorithm, it may not be possi
 > ## Serial Regions
 >
 > Examine the code and try to identify any serial regions that can't (or shouldn't) be parallelised.
-> 
+>
 >> ## Solution
 >>
 >> There aren't any large or time consuming serial regions, which is good from a parallelism perspective.
 >> However, there are a couple of small regions that are not amenable to running in parallel:
->> 
+>>
 >> * Setting the `10.0` initial temperature condition at the stick 'starting' boundary. We only need to set this once at the beginning of the stick, and not at the boundary of every section of the stick
 >> * Printing a representation of the final result, since this only needs to be done once to represent the whole stick, and not for every section.
->> 
+>>
 >> So we'd need to ensure only one rank deals with these, which in MPI is typically the zeroth rank.
 >> This also makes sense in terms of our parallelism approach, since the zeroth rank would be the beginning of the stick,
 >> where we'd set the initial boundary temperature.
@@ -311,7 +312,7 @@ Since we're not initialising for the entire stick (`GRIDSIZE`) but just the sect
 
 ~~~
   // Initialise the u and rho field to 0
-  for (i = 0; i <= rank_gridsize+1; i++) {
+  for (i = 0; i <= rank_gridsize + 1; ++i) {
     u[i] = 0.0;
     rho[i] = 0.0;
   }
@@ -322,9 +323,10 @@ As we found out in the *Serial Regions* exercise, we need to ensure that only a 
 
 ~~~
   // Create a start configuration with the heat energy
-  // u=10 at the x=0 boundary for rank 0
-  if (rank == 0)
+  // u = 10 at the x = 0 boundary for rank 0
+  if (rank == 0) {
     u[0] = 10.0;
+  }
 ~~~
 {: .language-c}
 
@@ -346,7 +348,7 @@ Then before `MPI_Finalize()` let's amend the code to the following:
   // We need to send data starting from the second element of u, since u[0] is a boundary
   resultbuf = malloc(sizeof(*resultbuf) * GRIDSIZE);
   MPI_Gather(&u[1], rank_gridsize, MPI_FLOAT, resultbuf, rank_gridsize, MPI_FLOAT, 0, MPI_COMM_WORLD);
-  
+
   if (rank == 0) {
     printf("Final result:\n");
     for (int j = 0; j < GRIDSIZE; j++) {
@@ -370,7 +372,7 @@ Before we parallelise the `poisson_step()` function, let's amend how we invoke i
 We need to amend how many slices it will compute, and add the `rank` and `n_ranks` variables, since we know from `Parallelism and Data Exchange` that it will need to perform some data exchange with other ranks:
 
 ~~~
-    unorm = poisson_step(u, unew, rho, hsq, rank_gridsize, rank, n_ranks );
+    unorm = poisson_step(u, unew, rho, hsq, rank_gridsize, rank, n_ranks);
 ~~~
 {: .language-c}
 
@@ -398,7 +400,7 @@ and the `MPI_Allreduce()` after the calculation of `unorm`:
 
 ~~~
   double unorm, global_unorm;
-  
+
   MPI_Allreduce(&unorm, &global_unorm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 ~~~
 {: .language-c}
@@ -435,21 +437,21 @@ So following the `MPI_Allreduce()` we've just added, let's deal with odd ranks f
   // The u field has been changed, communicate it to neighbours
   // With blocking communication, half the ranks should send first
   // and the other half should receive first
-  if ((rank%2) == 1) {
+  if ((rank % 2) == 1) {
     // Ranks with odd number send first
 
-    // Send data down from rank to rank-1
+    // Send data down from rank to rank - 1
     sendbuf = unew[1];
-    MPI_Send(&sendbuf, 1, MPI_FLOAT, rank-1, 1, MPI_COMM_WORLD);
-    // Receive dat from rank-1
-    MPI_Recv(&recvbuf, 1, MPI_FLOAT, rank-1, 2, MPI_COMM_WORLD, &mpi_status);
+    MPI_Send(&sendbuf, 1, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD);
+    // Receive data from rank - 1
+    MPI_Recv(&recvbuf, 1, MPI_FLOAT, rank - 1, 2, MPI_COMM_WORLD, &mpi_status);
     u[0] = recvbuf;
 
-    if (rank != (n_ranks-1)) {
-      // Send data up to rank+1 (if I'm not the last rank)
-      MPI_Send(&u[points], 1, MPI_FLOAT, rank+1, 1, MPI_COMM_WORLD);
-      // Receive data from rank+1
-      MPI_Recv(&u[points+1], 1, MPI_FLOAT, rank+1, 2, MPI_COMM_WORLD, &mpi_status);
+    if (rank != (n_ranks - 1)) {
+      // Send data up to rank + 1 (if I'm not the last rank)
+      MPI_Send(&u[points], 1, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD);
+      // Receive data from rank + 1
+      MPI_Recv(&u[points + 1], 1, MPI_FLOAT, rank + 1, 2, MPI_COMM_WORLD, &mpi_status);
     }
 ~~~
 {: .language-c}
@@ -477,17 +479,17 @@ From the perspective of evens, it should look like the following (highlighting t
     // Ranks with even number receive first
 
     if (rank != 0) {
-      // Receive data from rank-1 (if I'm not the first rank)
-      MPI_Recv(&u[0], 1, MPI_FLOAT, rank-1, 1, MPI_COMM_WORLD, &mpi_status);
+      // Receive data from rank - 1 (if I'm not the first rank)
+      MPI_Recv(&u[0], 1, MPI_FLOAT, rank - 1, 1, MPI_COMM_WORLD, &mpi_status);
       // Send data down to rank-1
-      MPI_Send(&u[1], 1, MPI_FLOAT, rank-1, 2, MPI_COMM_WORLD);
+      MPI_Send(&u[1], 1, MPI_FLOAT, rank - 1, 2, MPI_COMM_WORLD);
     }
 
-    if (rank != (n_ranks-1)) {
-      // Receive data from rank+1 (if I'm not the last rank)
-      MPI_Recv(&u[points+1], 1, MPI_FLOAT, rank+1, 1, MPI_COMM_WORLD, &mpi_status);
+    if (rank != (n_ranks - 1)) {
+      // Receive data from rank + 1 (if I'm not the last rank)
+      MPI_Recv(&u[points + 1], 1, MPI_FLOAT, rank + 1, 1, MPI_COMM_WORLD, &mpi_status);
       // Send data up to rank+1
-      MPI_Send(&u[points], 1, MPI_FLOAT, rank+1, 2, MPI_COMM_WORLD);
+      MPI_Send(&u[points], 1, MPI_FLOAT, rank + 1, 2, MPI_COMM_WORLD);
     }
   }
 ~~~
@@ -513,7 +515,7 @@ Run completed in 182 iterations with residue 9.60328e-06
 {: .output}
 
 Note that as it stands, the implementation assumes that `GRIDSIZE` is divisible by `n_ranks`.
-So to guarantee correct output, we should use only 
+So to guarantee correct output, we should use only
 
 ### Testing our Parallel Code
 
@@ -521,11 +523,11 @@ We should always ensure that as our parallel version is developed, that it behav
 This may not be possible initially, particularly as large parts of the code need converting to use MPI, but where possible, we should continue to test. So we should test once we have an initial MPI version, and as our code develops, perhaps with new optimisations to improve performance, we should test then too.
 
 > ## An Initial Test
-> 
+>
 > Test the mpi version of your code against the serial version, using 1, 2, 3, and 4 ranks with the MPI version.
 > Are the results as you would expect?
 > What happens if you test with 5 ranks, and why?
-> 
+>
 > > ## Solution
 > >
 > > Using these ranks, the MPI results should be the same as our serial version.
@@ -540,12 +542,12 @@ This may not be possible initially, particularly as large parts of the code need
 {: .challenge}
 
 > ## Limitations!
-> 
+>
 > You may remember that for the purposes of this episode we've assumed a homogeneous stick,
 > by setting the `rho` coefficient to zero for every slice.
 > As a thought experiment, if we wanted to address this limitation and model an inhomogeneous stick with different static coefficients for each slice,
 > how could we amend our code to allow this correctly for each slice across all ranks?
-> 
+>
 >> ## Solution
 >>
 >> One way would be to create a static lookup array with a `GRIDSIZE` number of elements.

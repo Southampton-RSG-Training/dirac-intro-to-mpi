@@ -348,4 +348,3 @@ communication and calculation is often worth the more difficult implementation a
 > {: .solution}
 >
 {: .challenge}
-

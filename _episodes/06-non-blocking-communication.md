@@ -102,15 +102,23 @@ For each blocking communication function we've seen, a non-blocking variant exis
 
 ```c
 int MPI_Isend(
-    const void *buf,        /* The data to be sent */
-    int count,              /* The number of elements of data to be sent */
-    MPI_Datatype datatype,  /* The datatype of the data */
-    int dest,               /* The rank to send data to */
-    int tag,                /* The communication tag */
-    MPI_Comm comm,          /* The communicator to use */
-    MPI_Request *request,   /* The communication request handle */
+    void *buf,
+    int count,
+    MPI_Datatype datatype,
+    int dest,
+    int tag,
+    MPI_Comm comm,
+    MPI_Request *request
 );
 ```
+
+| `*buf`: | The data to be sent |
+| `count`: | The number of elements of data |
+| `datatype`: | The data types of the data |
+| `dest`: | The rank to send data to |
+| `tag`: | The communication tag |
+| `comm`: | The communicator |
+| `*request`: | The request handle, used to track the communication |
 
 The arguments are identical to `MPI_Send()`, other than the addition of the `*request` argument. This argument is known
 as an *handle* (because it "handles" a communication request) which is used to track the progress of a (non-blocking)
@@ -133,10 +141,13 @@ the send buffer will means the wrong data is sent. Every non-blocking communicat
 
 ```c
 int MPI_Wait(
-    MPI_Request *request,  /* The request handle for the communication to wait for */
-    MPI_Status *status,    /* The status handle for the communication */
+    MPI_Request *request,
+    MPI_Status *status
 );
 ```
+
+| `*request`: | The request handle for the communication |
+| `*status`: | The status handle for the communication |
 
 Once we have used `MPI_Wait()` and the communication has finished, we can safely modify `some_ints` again. To receive
 the data send using a non-blocking send, we can use either the blocking `MPI_Recv()` or it's non-blocking variant,
@@ -152,6 +163,14 @@ int MPI_Irecv(
     MPI_Request *request,   /* The communication request handle */
 );
 ```
+
+| `*buf`: | A buffer to receive data into |
+| `count`: | The number of elements of data to receive |
+| `datatype`: | The data type of the data |
+| `source`: | The rank to receive data from |
+| `tag`: | The communication tag |
+| `comm`: | The communicator |
+| `*request`: | The request handle for the receive |
 
 > ## True or false?
 >
@@ -179,11 +198,11 @@ int some_ints[5] = { 1, 2, 3, 4, 5 };
 if (my_rank == 0) {
     MPI_Isend(some_ints, 5, MPI_INT, 1, 0, MPI_COMM_WORLD, &request);
     MPI_Wait(&request, &status);
-    some_ints[1] = 42;  /* After MPI_Wait(), some_ints has been sent and can be modified again */
+    some_ints[1] = 42;  // After MPI_Wait(), some_ints has been sent and can be modified again
 } else {
     MPI_Irecv(recv_ints, 5, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
     MPI_Wait(&request, &status);
-    int data_i_wanted = recv_ints[2];  /* recv_ints isn't guaranteed to have the correct data until after MPI_Wait()*/
+    int data_i_wanted = recv_ints[2];  // recv_ints isn't guaranteed to have the correct data until after MPI_Wait()
 }
 ```
 
@@ -198,25 +217,25 @@ MPI_Status status;
 MPI_Request request;
 
 if (my_rank == 0) {
-    /* This send important_data without being blocked and move into the next work */
+    // This send important_data without being blocked and move into the next work
     MPI_Isend(important_data, 16, MPI_INT, 1, 0, MPI_COMM_WORLD, &request);
 } else {
-    /* Start listening for the message from the other rank, but isn't blocked */
+    // Start listening for the message from the other rank, but isn't blocked
     MPI_Irecv(important_data, 16, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
 }
 
-/* Whilst the message is still sending or received, we should do some other work
-   to keep using the CPU (which isn't required for most of the communication.
-   IMPORTANT: the work here cannot modify or rely on important_data */
+// Whilst the message is still sending or received, we should do some other work
+// to keep using the CPU (which isn't required for most of the communication.
+// IMPORTANT: the work here cannot modify or rely on important_data */
 clear_model_parameters();
 initialise_model();
 
-/* Once we've done the work which doesn't require important_data, we need to wait until the
-   data is sent/received if it hasn't already */
+// Once we've done the work which doesn't require important_data, we need to wait until the
+// data is sent/received if it hasn't already */
 MPI_Wait(&request, &status);
 
-/* Now the model is ready and important_data has been sent/received, the simulation
-   carries on */
+// Now the model is ready and important_data has been sent/received, the simulation
+// carries on
 simulate_something(important_data);
 ```
 
@@ -255,7 +274,7 @@ simulate_something(important_data);
 > >
 > > MPI_Status statuses[2];
 > > MPI_Request requests[2] = { send_req, recv_req };
-> > MPI_Waitall(2, requests, statuses);  /* Wait for both requests in one call */
+> > MPI_Waitall(2, requests, statuses);  // Wait for both requests in one function
 > > ```
 > >
 > > This version of the code will not deadlock, because the non-blocking functions return immediately. So even though
@@ -278,7 +297,7 @@ simulate_something(important_data);
 > > }
 > >
 > > MPI_Wait(&send_req, &status);
-> > MPI_Wait(&recv_req, &status);  /* Wait for both requests in one call */
+> > MPI_Wait(&recv_req, &status);  // Wait for both requests in one function
 > > ```
 > >
 > {: .solution}
@@ -295,11 +314,15 @@ still returns but the value of the flag is false instead. `MPI_Test()` has the f
 
 ```c
 int MPI_Test(
-    MPI_Request *request,  /* The request handle for the communication to test */
-    int *flag,             /* A flag to indicate if the communication has completed - returned by pointer */
-    MPI_Status *status,    /* The status handle for the communication to test */
+    MPI_Request *request,
+    int *flag,
+    MPI_Status *status,
 );
 ```
+
+| `*request`: | The request handle for the communication |
+| `*flag`: | A flag to indicate if the communication has completed |
+| `*status`: | The status handle for the communication |
 
 `*request` and `*status` are the same you'd use for `MPI_Wait()`. `*flag` is the variable which is modified to indicate
 if the communication has finished or not. Since it's an integer, if the communication hasn't finished then `flag == 0`.
@@ -315,19 +338,19 @@ MPI_Status status;
 MPI_Request request;
 MPI_Irecv(recv_buffer, 16, MPI_INT, 0, 0, MPI_COMM_WORLD, &request);
 
-/* We need to define a flag, to track when the communication has completed */
+// We need to define a flag, to track when the communication has completed
 int comm_completed = 0;
 
-/* One example use case is keep checking if the communication has finished, and continuing
-   to do CPU work until it has */
+// One example use case is keep checking if the communication has finished, and continuing
+// to do CPU work until it has
 while (!comm_completed && work_still_to_do()) {
     do_some_other_work();
-    /* MPI_Test will return flag == true when the communication has finished */
+    // MPI_Test will return flag == true when the communication has finished
     MPI_Test(&request, &comm_completed, &status);
 }
 
-/* If there is no more work and the communication hasn't finished yet, then we should wait
-   for it to finish */
+// If there is no more work and the communication hasn't finished yet, then we should wait
+// for it to finish
 if (!comm_completed) {
     MPI_Wait(&request, &status);
 }
@@ -349,22 +372,22 @@ if (!comm_completed) {
 > communication timeout algorithm.
 >
 > ```c
-> #define COMM_TIMEOUT 60  /* seconds */
+> #define COMM_TIMEOUT 60  // seconds
 >
 > clock_t start_time = clock();
 > double elapsed_time = 0.0;
 > int comm_completed = 0
 >
 > while (!comm_completed && elapsed_time < COMM_TIMEOUT) {
->     /* Check if communication completed */
+>     // Check if communication completed
 >     MPI_Test(&request, &comm_completed, &status);
->     /* Update elapsed time */
+>     // Update elapsed time
 >     elapsed_time = (double)(clock() - start_time) / CLOCKS_PER_SEC;
 > }
 >
 > if (elapsed_time >= COMM_TIMEOUT) {
->     MPI_Cancel(&request);           /* Cancel the request to stop the, e.g. receive operation */
->     handle_communication_errors();  /* Put the program into a predictable state */
+>     MPI_Cancel(&request);           // Cancel the request to stop the, e.g. receive operation
+>     handle_communication_errors();  // Put the program into a predictable state
 > }
 > ```
 >
@@ -412,9 +435,7 @@ if (!comm_completed) {
 >
 >     sprintf(send_message, "Hello from rank %d!", my_rank);
 >
->     /*
->      * Your code goes here
->      */
+>     // Your code goes here
 >
 >     return MPI_Finalize();
 > }
@@ -508,6 +529,15 @@ int MPI_Ireduce(
 );
 ```
 
+| `*sendbuf`: | The data to be reduced by the root rank |
+| `*recvbuf`: | A buffer to contain the reduction output |
+| `count`: | The number of elements of data to be reduced |
+| `datatype`: | The data type of the data |
+| `op`: | The reduction operation to perform |
+| `root`: | The root rank, which will perform the reduction |
+| `comm`: | The communicator |
+| `*request`: | The request handle for the communicator |
+
 As with `MPI_Send()` vs. `MPI_Isend()` the only change in using the non-blocking variant of `MPI_Reduce()` is the
 addition of the `*request` argument, which returns a request handle. This is the request handle we'll use with either
 `MPI_Wait()` or `MPI_Test()` to ensure that the communication has finished, and been successful. The below code examples
@@ -577,9 +607,7 @@ MPI_Wait(&request, &status);
 >
 >     printf("Start : Rank %d: my_num = %d sum = %d\n", my_rank, my_num, sum);
 >
->     /*
->      * Your code goes here
->      */
+>     // Your code goes here
 >
 >     printf("End : Rank %d: my_num = %d sum = %d\n", my_rank, my_num, sum);
 >
