@@ -63,9 +63,9 @@ It's important to note that these functions represent only a subset of the funct
 
 In general, an MPI program follows a basic outline that includes the following steps:
 
-1. ***Initialization:*** The MPI environment is initialized using the `MPI_Init` function. This step sets up the necessary communication infrastructure and prepares the program for message passing.
+1. ***Initialization:*** The MPI environment is initialized using the `MPI_Init()` function. This step sets up the necessary communication infrastructure and prepares the program for message passing.
 2. ***Communication:*** MPI provides functions for sending and receiving messages between processes. The `MPI_Send` function is used to send messages, while the `MPI_Recv` function is used to receive messages.
-3. ***Termination:*** Once the necessary communication has taken place, the MPI environment is finalised using the `MPI_Finalize` function. This ensures the proper termination of the program and releases any allocated resources.
+3. ***Termination:*** Once the necessary communication has taken place, the MPI environment is finalised using the `MPI_Finalize()` function. This ensures the proper termination of the program and releases any allocated resources.
 
 ## Getting Started with MPI: MPI on HPC
 
@@ -186,9 +186,9 @@ mpirun -n 4 ./hello_world
 
 However, in the example above, the program does not know it was started by `mpirun`, and each copy just works as if they were the only one. For the copies to work together, they need to know about their role in the computation, in order to properly take advantage of parallelisation. This usually also requires knowing the total number of tasks running at the same time.
 
-- The program needs to call the `MPI_Init` function.
-- `MPI_Init` sets up the environment for MPI, and assigns a number (called the _rank_) to each process.
-- At the end, each process should also cleanup by calling `MPI_Finalize`.
+- The program needs to call the `MPI_Init()` function.
+- `MPI_Init()` sets up the environment for MPI, and assigns a number (called the _rank_) to each process.
+- At the end, each process should also cleanup by calling `MPI_Finalize()`.
 
 ~~~
 int MPI_Init(&argc, &argv);
@@ -196,9 +196,9 @@ int MPI_Finalize();
 ~~~
 {: .language-c}
 
-Both `MPI_Init` and `MPI_Finalize` return an integer.
+Both `MPI_Init()` and `MPI_Finalize()` return an integer.
 This describes errors that may happen in the function.
-Usually we will return the value of `MPI_Finalize` from the main function
+Usually we will return the value of `MPI_Finalize()` from the main function
 
 > ## I don't use command line arguments
 >

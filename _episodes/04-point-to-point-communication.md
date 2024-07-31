@@ -9,33 +9,33 @@ objectives:
 - Describe what is meant by point-to-point communication.
 - Learn how to send and receive data between ranks.
 keypoints:
-- Use `MPI_Send` and `MPI_Recv` to send and receive data between ranks
-- Using `MPI_SSend` will always block the sending rank until the message is received
-- Using `MPI_Send` may block the sending rank until the message is received, depending on whether the message is buffered and the buffer is available for reuse
-- Using `MPI_Recv` will always block the receiving rank until the message is received
+- Use `MPI_Send()` and `MPI_Recv()` to send and receive data between ranks
+- Using `MPI_Ssend()` will always block the sending rank until the message is received
+- Using `MPI_Send()` may block the sending rank until the message is received, depending on whether the message is buffered and the buffer is available for reuse
+- Using `MPI_Recv()` will always block the receiving rank until the message is received
 ---
 
 In the previous episode we introduced the various types of communication in MPI.
-In this section we will use the MPI library functions `MPI_Send` and
-`MPI_Recv`, which employ point-to-point communication, to send data from one rank to another.
+In this section we will use the MPI library functions `MPI_Send()` and
+`MPI_Recv()`, which employ point-to-point communication, to send data from one rank to another.
 
 <img src="fig/send-recv.png" alt="Sending data from one rank to another using MPI_SSend and MPI_Recv"/>
 
-Let's look at how `MPI_Send` and `MPI_Recv`are typically used:
+Let's look at how `MPI_Send()` and `MPI_Recv()`are typically used:
 
 - Rank A decides to send data to rank B. It first packs the data to send into a buffer, from which it will be taken.
-- Rank A then calls `MPI_Send` to create a message for rank B. The underlying MPI communication
+- Rank A then calls `MPI_Send()` to create a message for rank B. The underlying MPI communication
 is then given the responsibility of routing the message to the correct destination.
 - Rank B must know that it is about to receive a message and acknowledge this
-by calling `MPI_Recv`. This sets up a buffer for writing the incoming data when it arrives
+by calling `MPI_Recv()`. This sets up a buffer for writing the incoming data when it arrives
 and instructs the communication device to listen for the message.
 
-As mentioned in the previous episode, `MPI_Send` and `MPI_Recv` are *synchronous* operations,
+As mentioned in the previous episode, `MPI_Send()` and `MPI_Recv()` are *synchronous* operations,
 and will not return until the communication on both sides is complete.
 
 ## Sending a Message: MPI_Send
 
-The `MPI_Send` function is defined as follows:
+The `MPI_Send()` function is defined as follows:
 
 ~~~c
 int MPI_Send(
@@ -67,11 +67,11 @@ MPI_Send(message, 14, MPI_CHAR, 1, 0, MPI_COMM_WORLD);
 
 So we are sending 14 elements of `MPI_CHAR` one time, and specified `0` for our message tag since we don't anticipate
 having to send more than one type of message. This call is synchronous, and will block until the corresponding
-`MPI_Recv` operation receives and acknowledges receipt of the message.
+`MPI_Recv()` operation receives and acknowledges receipt of the message.
 
 > ## MPI_Ssend: an Alternative to MPI_Send
 >
-> `MPI_Send` represents the "standard mode" of sending messages to other ranks, but some aspects of its behaviour
+> `MPI_Send()` represents the "standard mode" of sending messages to other ranks, but some aspects of its behaviour
 > are dependent on both the implementation of MPI being used, and the circumstances of its use: there are three
 > scenarios to consider:
 >
@@ -83,7 +83,7 @@ having to send more than one type of message. This call is synchronous, and will
 > receive. It is dependent on the MPI implementation as to what scenario is selected, based on performance, memory,
 > and other considerations.
 >
-> A very similar alternative to `MPI_Send` is to use `MPI_Ssend` - synchronous send - which ensures the communication
+> A very similar alternative to `MPI_Send()` is to use `MPI_Ssend()` - synchronous send - which ensures the communication
 > is both synchronous and blocking. This function guarantees that when it returns, the destination has categorically
 > started receiving the message.
 {: .callout}
@@ -91,7 +91,7 @@ having to send more than one type of message. This call is synchronous, and will
 
 ## Receiving a Message: MPI_Recv
 
-Conversely, the `MPI_Recv` function looks like the following:
+Conversely, the `MPI_Recv()` function looks like the following:
 
 ~~~c
 int MPI_Recv(
@@ -123,13 +123,13 @@ MPI_Recv(message, 14, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &status);
 {: .language-c}
 
 Here, we create our buffer to receive the data, as well as a variable to hold the exit status of the receive operation.
-We then call `MPI_Recv`, specifying our returned data buffer, the number of elements we will receive (14) which will be
+We then call `MPI_Recv()`, specifying our returned data buffer, the number of elements we will receive (14) which will be
 of type `MPI_CHAR` and sent by rank 0, with a message tag of 0.
-As with `MPI_Send`, this call will block - in this case until the message is received and acknowledgement is sent
+As with `MPI_Send()`, this call will block - in this case until the message is received and acknowledgement is sent
 to rank 0, at which case both ranks will proceed.
 
 Let's put this together with what we've learned so far.
-Here's an example program that uses `MPI_Send` and `MPI_Recv` to send the string `"Hello World!"`
+Here's an example program that uses `MPI_Send()` and `MPI_Recv()` to send the string `"Hello World!"`
 from rank 0 to rank 1:
 
 ~~~
@@ -212,7 +212,7 @@ int main(int argc, char **argv) {
 > > ## Solution
 > >
 > > 1. The program will hang since it's waiting for a message with a tag that will never be sent (press `Ctrl-C` to kill
-> > the hanging process). To resolve this, make the tag in `MPI_Recv` match the tag you specified in `MPI_Send`.
+> > the hanging process). To resolve this, make the tag in `MPI_Recv()` match the tag you specified in `MPI_Send()`.
 > > 2. You will likely see a message like the following:
 > >    ~~~
 > >    [...:220695] *** An error occurred in MPI_Recv
@@ -391,13 +391,13 @@ int main(int argc, char **argv) {
 >
 >> ## Solution
 >>
->> `MPI_Send` will block execution until the receiving process has called
->> `MPI_Recv`. This prevents the sender from unintentionally modifying the message
+>> `MPI_Send()` will block execution until the receiving process has called
+>> `MPI_Recv()`. This prevents the sender from unintentionally modifying the message
 >> buffer before the message is actually sent.
->> Above, both ranks call `MPI_Send` and just wait for the other to respond.
+>> Above, both ranks call `MPI_Send()` and just wait for the other to respond.
 >> The solution is to have one of the ranks receive its message before sending.
 >>
->> Sometimes `MPI_Send` will actually make a copy of the buffer and return immediately.
+>> Sometimes `MPI_Send()` will actually make a copy of the buffer and return immediately.
 >> This generally happens only for short messages.
 >> Even when this happens, the actual transfer will not start before the receive is posted.
 >>
