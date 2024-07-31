@@ -112,10 +112,10 @@ we can only them as arguments in MPI functions.
 > need to change the type, you would only have to do it in one place, e.g.:
 >
 > ```c
-> /* define constants for your data types */
+> // define constants for your data types
 > #define MPI_INT_TYPE MPI_INT
 > #define INT_TYPE int
-> /* use them as you would normally */
+> // use them as you would normally
 > INT_TYPE my_int = 1;
 > ```
 >
@@ -157,7 +157,7 @@ functions like `MPI_Comm_rank()` to get the rank number,
 
 ```c
 int my_rank;
-MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);  /* MPI_COMM_WORLD is the communicator the rank belongs to */
+MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);  // MPI_COMM_WORLD is the communicator the rank belongs to
 ```
 
 In addition to `MPI_COMM_WORLD`, we can make sub-communicators and distribute ranks into them. Messages can only be sent
