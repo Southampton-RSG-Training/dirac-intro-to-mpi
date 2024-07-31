@@ -37,9 +37,9 @@ and will not return until the communication on both sides is complete.
 
 The `MPI_Send` function is defined as follows:
 
-~~~
+~~~c
 int MPI_Send(
-    const void* data,
+    void *data,
     int count,
     MPI_Datatype datatype,
     int destination,
@@ -48,13 +48,11 @@ int MPI_Send(
 ~~~
 {: .language-c}
 
-The arguments to
-
 | `data`:         | Pointer to the start of the data being sent. We would not expect this to change, hence it's defined as `const` |
 | `count`:        | Number of elements to send |
 | `datatype`:     | The type of the element data being sent, e.g. MPI_INTEGER, MPI_CHAR, MPI_FLOAT, MPI_DOUBLE, ... |
 | `destination`:  | The rank number of the rank the data will be sent to |
-| `tag`:          | An optional message tag (integer), which is optionally used to differentiate types of messages. We can specify `0` if we don't need different types of messages |
+| `tag`:          | An message tag (integer), which is used to differentiate types of messages. We can specify `0` if we don't need different types of messages |
 | `communicator`: | The communicator, e.g. MPI_COMM_WORLD as seen in previous episodes |
 {: .show-c}
 
@@ -95,15 +93,15 @@ having to send more than one type of message. This call is synchronous, and will
 
 Conversely, the `MPI_Recv` function looks like the following:
 
-~~~
+~~~c
 int MPI_Recv(
-    void* data,
+    void *data,
     int count,
     MPI_Datatype datatype,
     int source,
     int tag,
     MPI_Comm communicator,
-    MPI_Status* status)
+    MPI_Status *status)
 ~~~
 
 | `data`:         | Pointer to where the received data should be written |
@@ -138,31 +136,31 @@ from rank 0 to rank 1:
 #include <stdio.h>
 #include <mpi.h>
 
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
   int rank, n_ranks;
 
   // First call MPI_Init
   MPI_Init(&argc, &argv);
 
   // Check that there are two ranks
-  MPI_Comm_size(MPI_COMM_WORLD,&n_ranks);
-  if( n_ranks != 2 ){
+  MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
+  if (n_ranks != 2) {
     printf("This example requires exactly two ranks\n");
     MPI_Finalize();
-    return(1);
+    return 1;
   }
 
   // Get my rank
   MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 
-  if( rank == 0 ){
+  if (rank == 0) {
      char *message = "Hello, world!\n";
      MPI_Send(message, 14, MPI_CHAR, 1, 0, MPI_COMM_WORLD);
   }
 
-  if( rank == 1 ){
+  if (rank == 1) {
      char message[14];
-     MPI_Status  status;
+     MPI_Status status;
      MPI_Recv(message, 14, MPI_CHAR, 0, 0, MPI_COMM_WORLD, &status);
      printf("%s",message);
   }
@@ -243,7 +241,7 @@ int main(int argc, char** argv) {
 >> #include <stdio.h>
 >> #include <mpi.h>
 >>
->> int main(int argc, char** argv) {
+>> int main(int argc, char **argv) {
 >>     int rank, n_ranks, my_pair;
 >>
 >>     // First call MPI_Init
@@ -256,21 +254,20 @@ int main(int argc, char** argv) {
 >>     MPI_Comm_rank(MPI_COMM_WORLD,&rank);
 >>
 >>     // Figure out my pair
->>     if( rank%2 == 1 ){
+>>     if (rank % 2 == 1) {
 >>        my_pair = rank - 1;
 >>     } else {
 >>        my_pair = rank + 1;
 >>     }
 >>
 >>     // Run only if my pair exists
->>     if( my_pair < n_ranks ){
->>
->>        if( rank%2 == 0 ){
+>>     if (my_pair < n_ranks) {
+>>        if (rank % 2 == 0) {
 >>            char *message = "Hello, world!\n";
 >>            MPI_Send(message, 14, MPI_CHAR, my_pair, 0, MPI_COMM_WORLD);
 >>        }
 >>
->>        if( rank%2 == 1 ){
+>>        if (rank % 2 == 1) {
 >>            char message[14];
 >>            MPI_Status  status;
 >>            MPI_Recv(message, 14, MPI_CHAR, my_pair, 0, MPI_COMM_WORLD, &status);
@@ -295,7 +292,7 @@ int main(int argc, char** argv) {
 > #include <stdio.h>
 > #include <mpi.h>
 >
-> int main(int argc, char** argv) {
+> int main(int argc, char **argv) {
 >     int rank;
 >     int message[30];
 >
@@ -320,7 +317,7 @@ int main(int argc, char** argv) {
 >> #include <stdio.h>
 >> #include <mpi.h>
 >>
->> int main(int argc, char** argv) {
+>> int main(int argc, char **argv) {
 >>     int rank, n_ranks, numbers_per_rank;
 >>
 >>     // First call MPI_Init
@@ -329,7 +326,7 @@ int main(int argc, char** argv) {
 >>     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 >>     MPI_Comm_size(MPI_COMM_WORLD, &n_ranks);
 >>
->>     if( rank != 0 ) {
+>>     if (rank != 0) {
 >>        // All ranks other than 0 should send a message
 >>
 >>        char message[30];
@@ -360,7 +357,7 @@ int main(int argc, char** argv) {
 >
 > Try the code below with two ranks and see what happens. How would you change the code to fix the problem?
 >
-> _Note: If you are using the MPICH library, this example might automagically work. With OpenMPI it shouldn't!)_
+> _Note: If you are using MPICH, this example might work. With OpenMPI it shouldn't!_
 >
 > ~~~
 > #include <mpi.h>
@@ -378,8 +375,8 @@ int main(int argc, char** argv) {
 >     MPI_Status recv_status;
 >
 >     if (rank == 0) {
->         /* synchronous send: returns when the destination has started to
->            receive the message */
+>         // synchronous send: returns when the destination has started to
+>         // receive the message
 >         MPI_Ssend(&numbers, ARRAY_SIZE, MPI_INT, 1, comm_tag, MPI_COMM_WORLD);
 >         MPI_Recv(&numbers, ARRAY_SIZE, MPI_INT, 1, comm_tag, MPI_COMM_WORLD, &recv_status);
 >     } else {
@@ -405,12 +402,17 @@ int main(int argc, char** argv) {
 >> Even when this happens, the actual transfer will not start before the receive is posted.
 >>
 >> For this example, let's have rank 0 send first, and rank 1 receive first.
->> So all we need to do to fix this is to swap the send and receive in the case of rank 1
->> (after the `else`):
+>> So all we need to do to fix this is to swap the send and receive for rank 1:
 >>
 >> ~~~
->>         MPI_Recv(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD, &recv_status);
->>         MPI_Ssend(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD);
+>> if (rank == 0) {
+>>    MPI_Ssend(&numbers, ARRAY_SIZE, MPI_INT, 1, comm_tag, MPI_COMM_WORLD);
+>>    MPI_Recv(&numbers, ARRAY_SIZE, MPI_INT, 1, comm_tag, MPI_COMM_WORLD, &recv_status);
+>> } else {
+>>    // Change the order, receive then send
+>>    MPI_Recv(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD, &recv_status);
+>>    MPI_Ssend(&numbers, ARRAY_SIZE, MPI_INT, 0, comm_tag, MPI_COMM_WORLD);
+>> }
 >> ~~~
 >>{: .language-c}
 >{: .solution}
@@ -435,7 +437,7 @@ int main(int argc, char** argv) {
 >> #include <stdio.h>
 >> #include <mpi.h>
 >>
->> int main(int argc, char** argv) {
+>> int main(int argc, char **argv) {
 >>     int rank, neighbour;
 >>     int max_count = 1000000;
 >>     int counter;
@@ -450,13 +452,13 @@ int main(int argc, char** argv) {
 >>     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 >>
 >>     // Call the other rank the neighbour
->>     if( rank == 0 ){
+>>     if (rank == 0) {
 >>         neighbour = 1;
 >>     } else {
 >>         neighbour = 0;
 >>     }
 >>
->>     if( rank == 0 ){
+>>     if (rank == 0) {
 >>         // Rank 0 starts with the ball. Send it to rank 1
 >>         MPI_Send(&ball, 1, MPI_INT, 1, 0, MPI_COMM_WORLD);
 >>     }
@@ -465,8 +467,7 @@ int main(int argc, char** argv) {
 >>     // the behaviour is the same for both ranks
 >>     counter = 0;
 >>     bored = 0;
->>     while( !bored )
->>     {
+>>     while (!bored) {
 >>         // Receive the ball
 >>         MPI_Recv(&ball, 1, MPI_INT, neighbour, 0, MPI_COMM_WORLD, &status);
 >>

@@ -109,14 +109,14 @@ In other words, elements in other rows are not contiguous.
 > ```c
 > int num_rows = 3, num_cols = 5;
 >
-> float **matrix = malloc(num_rows * sizeof(float*));  /* Each pointer is the start of a row */
+> float **matrix = malloc(num_rows * sizeof(float*));  // Each pointer is the start of a row
 > for (int i = 0; i < num_rows; ++i) {
->    matrix[i] = malloc(num_cols * sizeof(float));     /* Here we allocate memory to store the column elements for row i */
+>    matrix[i] = malloc(num_cols * sizeof(float));     // Here we allocate memory to store the column elements for row i
 > }
 >
 > for (int i = 0; i < num_rows; ++i) {
 >    for (int j = 0; i < num_cols; ++j) {
->       matrix[i][j] = 3.14159;                        /* Indexing is done as matrix[rows][cols] */
+>       matrix[i][j] = 3.14159;                        // Indexing is done as matrix[rows][cols]
 >    }
 > }
 > ```
@@ -161,13 +161,19 @@ communication. To create a vector, we create a new datatype using `MPI_Type_vect
 
 ```c
 int MPI_Type_vector(
-   int count,              /* The number of 'blocks' which makes up the vector */
-   int blocklength,        /* The number of contiguous elements in a block */
-   int stride,             /* The number of elements between the start of each block */
-   MPI_Datatype oldtype,   /* The datatype of the elements of the vector, e.g. MPI_INT, MPI_FLOAT */
-   MPI_Datatype *newtype   /* The new datatype which represents the vector  - note that this is a pointer */
+   int count,
+   int blocklength,
+   int stride,
+   MPI_Datatype oldtype,
+   MPI_Datatype *newtype
 );
 ```
+
+| `count`: | The number of "blocks" which make up the vector |
+| `blocklength`: | The number of contiguous elements in a block |
+| `stride`: | The number of elements between the start of each block |
+| `oldtype`: | The data type of the elements of the vector, e.g. MPI_INT, MPI_FLOAT |
+| `newtype`: | The newly created data type to represent the vector |
 
 To understand what the arguments mean, look at the diagram below showing a vector to send two rows of a 4 x 4 matrix
 with a row in between (rows 2 and 4),
@@ -186,7 +192,7 @@ disastrous consequences!
 
 ```c
 int MPI_Type_commit(
-   MPI_Datatype *datatype  /* The datatype to commit - note that this is a pointer */
+   MPI_Datatype *datatype  // The datatype to commit - note that this is a pointer
 );
 ```
 
@@ -197,28 +203,28 @@ free up the resources, we use `MPI_Type_free()`,
 
 ```c
 int MPI_Type_free (
-   MPI_Datatype *datatype  /* The datatype to clean up -- note this is a pointer */
+   MPI_Datatype *datatype  // The datatype to clean up -- note this is a pointer
 );
 ```
 
 The following example code uses a vector to send two rows from a 4 x 4 matrix, as in the example diagram above.
 
 ```c
-/* The vector is a MPI_Datatype */
+// The vector is a MPI_Datatype
 MPI_Datatype rows_type;
 
-/* Create the vector type */
+// Create the vector type
 const int count = 2;
 const int blocklength = 4;
 const int stride = 8;
 MPI_Type_vector(count, blocklength, stride, MPI_INT, &rows_type);
 
-/* Don't forget to commit it */
+// Don't forget to commit it
 MPI_Type_commit(&rows_type);
 
-/* Send the middle row of our 2d matrix array. Note that we are sending
-   &matrix[1][0] and not matrix. This is because we are using an offset
-   to change the starting point of where we begin sending memory */
+// Send the middle row of our 2d matrix array. Note that we are sending
+// &matrix[1][0] and not matrix. This is because we are using an offset
+// to change the starting point of where we begin sending memory
 int matrix[4][4] = {
    { 1,  2,  3,  4},
    { 5,  6,  7,  8},
@@ -229,14 +235,14 @@ int matrix[4][4] = {
 if (my_rank == 0) {
     MPI_Send(&matrix[1][0], 1, rows_type, 1, 0, MPI_COMM_WORLD);
 } else {
-    /* The receive function doesn't "work" with vector types, so we have to
-       say that we are expecting 8 integers instead */
+    // The receive function doesn't "work" with vector types, so we have to
+    // say that we are expecting 8 integers instead
     const int num_elements = count * blocklength;
     int recv_buffer[num_elements];
     MPI_Recv(recv_buffer, num_elements, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 }
 
-/* The final thing to do is to free the new datatype when we no longer need it */
+// The final thing to do is to free the new datatype when we no longer need it
 MPI_Type_free(&rows_type);
 ```
 
@@ -426,13 +432,19 @@ Instead of `MPI_Type_create_vector()`, for a struct, we use,
 
 ```c
 int MPI_Type_create_struct(
-   int count,                         /* The number of members/fields in the struct */
-   int *array_of_blocklengths,        /* The length of the members/fields, as you would use in MPI_Send */
-   MPI_Aint *array_of_displacements,  /* The relative positions of each member/field in bytes */
-   MPI_Datatype *array_of_types,      /* The MPI type of each member/field */
-   MPI_Datatype *newtype,             /* The new derived datatype */
+   int count,
+   int *array_of_blocklengths,
+   MPI_Aint *array_of_displacements,
+   MPI_Datatype *array_of_types,
+   MPI_Datatype *newtype,
 );
 ```
+
+| `count`: | The number of fields in the struct |
+| `*array_of_blocklengths`: | The length of each field, as you would use to send that field using `MPI_Send` |
+| `*array_of_displacements`: | The relative positions of each field in bytes |
+| `*array_of_types`: | The MPI type of each field |
+| `*newtype`: | The newly created data type for the struct |
 
 The main difference between vector and struct derived types is that the arguments for structs expect arrays, since
 structs are made up of multiple variables. Most of these arguments are straightforward, given what we've just seen for
@@ -455,54 +467,57 @@ do this, we can use the function `MPI_Get_address()`,
 
 ```c
 int MPI_Get_address{
-   const void *location,  /* A pointer to the variable we want the address for */
-   MPI_Aint *address,     /* The address of the variable, as an MPI Address Integer -- returned via pointer */
+   const void *location,
+   MPI_Aint *address,
 };
 ```
+
+| `*location`: | A pointer to the variable we want the address of |
+| `*address`: | The address of the variable, as an MPI_Aint (address integer) |
 
 In the following example, we use `MPI_Type_create_struct()` and `MPI_Get_address()` to create a derived type for a
 struct with two members,
 
 ```c
-/* Define and initialize a struct, named foo, with an int and a double */
+// Define and initialize a struct, named foo, with an int and a double
 struct MyStruct {
    int id;
    double value;
 } foo = {.id = 0, .value = 3.1459};
 
-/* Create arrays to describe the length of each member and their type */
+// Create arrays to describe the length of each member and their type
 int count = 2;
 int block_lengths[2] = {1, 1};
 MPI_Datatype block_types[2] = {MPI_INT, MPI_DOUBLE};
 
-/* Now we calculate the displacement of each member, which are stored in an
-   MPI_Aint designed for storing memory addresses */
+// Now we calculate the displacement of each member, which are stored in an
+// MPI_Aint designed for storing memory addresses
 MPI_Aint base_address;
 MPI_Aint block_offsets[2];
 
-MPI_Get_address(&foo, &base_address);            /* First of all, we find the address of the start of the struct */
-MPI_Get_address(&foo.id, &block_offsets[0]);     /* Now the address of the first member "id" */
-MPI_Get_address(&foo.value, &block_offsets[1]);  /* And the second member "value" */
+MPI_Get_address(&foo, &base_address);            // First of all, we find the address of the start of the struct
+MPI_Get_address(&foo.id, &block_offsets[0]);     // Now the address of the first member "id"
+MPI_Get_address(&foo.value, &block_offsets[1]);  // And the second member "value"
 
-/* Calculate the offsets, by subtracting the address of each field from the
-   base address of the struct */
+// Calculate the offsets, by subtracting the address of each field from the
+// base address of the struct
 for (int i = 0; i < 2; ++i) {
-   /* MPI_Aint_diff is a macro to calculate the difference between two
-      MPI_Aints and is a replacement for:
-      (MPI_Aint) ((char *) block_offsets[i] - (char *) base_address) */
+   // MPI_Aint_diff is a macro to calculate the difference between two
+   // MPI_Aints and is a replacement for:
+   //       (MPI_Aint) ((char *) block_offsets[i] - (char *) base_address)
    block_offsets[i] = MPI_Aint_diff(block_offsets[i], base_address);
 }
 
-/* We finally can create out struct data type */
+// We finally can create out struct data type
 MPI_Datatype struct_type;
 MPI_Type_create_struct(count, block_lengths, block_offsets, block_types, &struct_type);
 MPI_Type_commit(&struct_type);
 
-/* Another difference between vector and struct derived types is that in
-   MPI_Recv, we use the struct type. We have to do this because we aren't
-   receiving a contiguous block of a single type of date. By using the type, we
-   tell MPI_Recv how to understand the mix of data types and padding and how to
-   assign those back to recv_struct */
+// Another difference between vector and struct derived types is that in
+// MPI_Recv, we use the struct type. We have to do this because we aren't
+// receiving a contiguous block of a single type of date. By using the type, we
+// tell MPI_Recv how to understand the mix of data types and padding and how to
+// assign those back to recv_struct
 if (my_rank == 0) {
    MPI_Send(&foo, 1, struct_type, 1, 0, MPI_COMM_WORLD);
 } else {
@@ -510,7 +525,7 @@ if (my_rank == 0) {
    MPI_Recv(&recv_struct, 1, struct_type, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 }
 
-/* Remember to free the derived type */
+// Remember to free the derived type
 MPI_Type_free(&struct_type);
 ```
 
@@ -637,7 +652,7 @@ MPI_Type_free(&struct_type);
 > ```c
 > #include <stddef.h>
 > MPI_Aint displacements[2];
-> displacements[0] = (MPI_Aint) offsetof(struct MyStruct, id);     /* The cast to MPI_Aint is for extra safety */
+> displacements[0] = (MPI_Aint) offsetof(struct MyStruct, id);     // The cast to MPI_Aint is for extra safety
 > displacements[1] = (MPI_Aint) offsetof(struct MyStruct, value);
 >```
 >
@@ -684,15 +699,23 @@ the `MPI_Pack()` function,
 
 ```c
 int MPI_Pack(
-   const void *inbuf,      /* The data we want to put into the buffer */
-   int incount,            /* The number of elements of the buffer */
-   MPI_Datatype datatype,  /* The datatype of the elements */
-   void *outbuf,           /* The contiguous buffer to pack the data into */
-   int outsize,            /* The size of the contiguous buffer, in bytes */
-   int *position,          /* A counter of how far into the contiguous buffer to write to */
-   MPI_Comm comm           /* The communicator the packed message will be sent using */
+   const void *inbuf,
+   int incount,
+   MPI_Datatype datatype,
+   void *outbuf,
+   int outsize,
+   int *position,
+   MPI_Comm comm
 );
 ```
+
+| `*inbuf`: | The data to pack into the buffer |
+| `incount`: | The number of elements to pack |
+| `datatype`: | The data type of the data to pack |
+| `*outbuf`: | The out buffer of contiguous data |
+| `outsize`: | The size of the out buffer, in bytes |
+| `*position`: | A counter for how far into the contiguous buffer to write (records the position, in bytes) |
+| `comm`: | The communicator |
 
 In the above, `inbuf` is the data we want to pack into a contiguous buffer and `incount` and `datatype` define the
 number of elements in and the datatype of `inbuf`. The parameter `outbuf` is the contiguous buffer the data is packed
@@ -709,11 +732,11 @@ an integer array and a floating point array which we wanted to pack into the buf
 calculate,
 
 ```c
-/* The total buffer size is the sum of the bytes required for the int and float array */
+// The total buffer size is the sum of the bytes required for the int and float array
 int size_int_array = num_int_elements * sizeof(int);
 int size_float_array = num_float_elements * sizeof(float);
 int buffer_size = size_int_array + size_float_array;
-/* The buffer is a char *, but could also be cast as void * if you prefer */
+// The buffer is a char *, but could also be cast as void * if you prefer
 char *buffer = malloc(buffer_size * sizeof(char));  // a char is 1 byte, so sizeof(char) is optional
 ```
 
@@ -722,13 +745,18 @@ far the easiest way to handle these is to use `MPI_Pack_size()`, which supports 
 `MPI_Datatype`,
 
 ```c
-int MPI_Pack_size(
-   int incount,            /* The number of elements in the data */
-   MPI_Datatype datatype,  /* The datatype of the data*/
-   MPI_Comm comm,          /* The communicator the data will be sent over */
-   int *size               /* The calculated upper size limit for the buffer, in bytes */
+nt MPI_Pack_size(
+   int incount,
+   MPI_Datatype datatype,
+   MPI_Comm comm,
+   int *size
 );
 ```
+
+| `incount`: | The number of data elements |
+| `datatype`: | The data type of the data |
+| `comm`: | The communicator |
+| `*size`: | The calculated upper size limit for the buffer, in bytes |
 
 `MPI_Pack_size()` is a helper function to calculate the *upper bound* of memory required. It is, in general, preferable
 to calculate the buffer size using this function, as it takes into account any implementation specific MPI detail and
@@ -747,15 +775,23 @@ When a rank has received a contiguous buffer, it has to be unpacked into its con
 
 ```c
 int MPI_Unpack(
-   const void *inbuf,      /* The contiguous buffer to unpack */
-   int insize,             /* The total size of the buffer, in bytes */
-   int *position,          /* The position, in bytes, for where to start unpacking from */
-   void *outbuf,           /* An array, or variable, to unpack data into -- this is the output */
-   int outcount,           /* The number of elements of data to unpack */
-   MPI_Datatype datatype,  /* The datatype of the elements to unpack */
-   MPI_Comm comm,          /* The communicator the message was sent using */
+   void *inbuf,
+   int insize,
+   int *position,
+   void *outbuf,
+   int outcount,
+   MPI_Datatype datatype,
+   MPI_Comm comm,
 );
 ```
+
+| `*inbuf`: | The contiguous buffer to unpack |
+| `insize`: | The total size of the buffer, in bytes |
+| `*position`: | The position, in bytes, from where to start unpacking from |
+| `*outbuf`: | An array, or variable, to unpack data into -- this is the output |
+| `outcount`: | The number of elements of data to unpack |
+| `datatype`: | The data type of elements to unpack |
+| `comm`: | The communicator |
 
 The arguments for this function are essentially the reverse of `MPI_Pack()`. Instead of being the buffer to pack into,
 `inbuf` is now the packed buffer and `position` is the position, in bytes, in the buffer where to unpacking from.
@@ -765,8 +801,8 @@ In the example below, `MPI_Pack()`, `MPI_Pack_size()` and `MPI_Unpack()` are use
 3 x 3 matrix.
 
 ```c
-/* Allocate and initialise a (non-contiguous) 2D matrix that we will pack into
-   a buffer */
+// Allocate and initialise a (non-contiguous) 2D matrix that we will pack into
+// a buffer
 int num_rows = 3, num_cols = 3;
 int **matrix = malloc(num_rows * sizeof(int *));
 for (int i = 0; i < num_rows; ++i) {
@@ -776,37 +812,36 @@ for (int i = 0; i < num_rows; ++i) {
    }
 }
 
-/* Determine the upper limit for the amount of memory the buffer requires. Since
-   this is a simple situation, we could probably have done this manually using
-   `num_rows * num_cols * sizeof(int)`. The size `pack_buffer_size` is returned in
-   bytes */
+// Determine the upper limit for the amount of memory the buffer requires. Since
+// this is a simple situation, we could probably have done this manually using
+// `num_rows * num_cols * sizeof(int)`. The size `pack_buffer_size` is returned in
+// bytes
 int pack_buffer_size;
 MPI_Pack_size(num_rows * num_cols, MPI_INT, MPI_COMM_WORLD, &pack_buffer_size);
 
 if (my_rank == 0) {
-    /* Create the pack buffer and pack each row of data into it buffer
-       one by one */
+    // Create the pack buffer and pack each row of data into it buffer
+    // one by one
     int position = 0;
     char *packed_data = malloc(pack_buffer_size);
     for (int i = 0; i < num_rows; ++i) {
         MPI_Pack(matrix[i], num_cols, MPI_INT, packed_data, pack_buffer_size, &position, MPI_COMM_WORLD);
     }
 
-    /* Send the packed data to rank 1 */
+    // Send the packed data to rank 1
     MPI_Send(packed_data, pack_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
 } else {
-    /* Create a receive buffer and get the packed buffer from rank 0 */
+    // Create a receive buffer and get the packed buffer from rank 0
     char *received_data = malloc(pack_buffer_size);
     MPI_Recv(received_data, pack_buffer_size + 1, MPI_PACKED, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    /* allocate a matrix to put the receive buffer into -- this is for
-       demonstration purposes */
+    // Allocate a matrix to put the receive buffer into -- this is for demonstration purposes
     int **my_matrix = malloc(num_rows * sizeof(int *));
     for (int i = 0; i < num_cols; ++i) {
         my_matrix[i] = malloc(num_cols * sizeof(int));
     }
 
-    /* Unpack the received data row by row into my_matrix */
+    // Unpack the received data row by row into my_matrix
     int position = 0;
     for (int i = 0; i < num_rows; ++i) {
         MPI_Unpack(received_data, pack_buffer_size, &position, my_matrix[i], num_cols, MPI_INT, MPI_COMM_WORLD);
@@ -832,13 +867,13 @@ if (my_rank == 0) {
 > number of elements in the message.
 >
 > ```c
-> /* First probe for a message, to get the status of it */
+> // First probe for a message, to get the status of it
 > MPI_Status status;
 > MPI_Probe(0, 0, MPI_COMM_WORLD, &status);
-> /* Using MPI_Get_count we can get the number of elements of a particular data type */
+> // Using MPI_Get_count we can get the number of elements of a particular data type
 > int message_size;
 > MPI_Get_count(&status, MPI_PACKED, &buffer_size);
-> /* MPI_PACKED represents an element of a "byte stream." So, buffer_size is the size of the buffer to allocate */
+> // MPI_PACKED represents an element of a "byte stream." So, buffer_size is the size of the buffer to allocate
 > char *buffer = malloc(buffer_size);
 >```
 >
@@ -857,7 +892,7 @@ if (my_rank == 0) {
 > int   *int_data = malloc(int_data_count * sizeof(int));
 > float *float_data = malloc(float_data_count * sizeof(float));
 >
-> /* Initialize the arrays with some values */
+> // Initialize the arrays with some values
 > for (int i = 0; i < int_data_count; ++i) {
 >   int_data[i] = i + 1;
 > }
@@ -907,9 +942,9 @@ if (my_rank == 0) {
 > >             float_data[i] = 3.14159 * (i + 1);
 > >         }
 > >
-> >         /* use MPI_Pack_size to determine how big the packed buffer needs to be */
+> >         // use MPI_Pack_size to determine how big the packed buffer needs to be
 > >         int buffer_size_count, buffer_size_int, buffer_size_float;
-> >         MPI_Pack_size(2, MPI_INT, MPI_COMM_WORLD, &buffer_size_count); /* 2 * INT because we will have 2 counts*/
+> >         MPI_Pack_size(2, MPI_INT, MPI_COMM_WORLD, &buffer_size_count); // 2 * INT because we will have 2 counts
 > >         MPI_Pack_size(int_data_count, MPI_INT, MPI_COMM_WORLD, &buffer_size_int);
 > >         MPI_Pack_size(float_data_count, MPI_FLOAT, MPI_COMM_WORLD, &buffer_size_float);
 > >         int total_buffer_size = buffer_size_int + buffer_size_float + buffer_size_count;
@@ -917,13 +952,13 @@ if (my_rank == 0) {
 > >         int position = 0;
 > >         char *buffer = malloc(total_buffer_size);
 > >
-> >         /* Pack the data size, followed by the actually data */
+> >         // Pack the data size, followed by the actually data
 > >         MPI_Pack(&int_data_count, 1, MPI_INT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
 > >         MPI_Pack(int_data, int_data_count, MPI_INT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
 > >         MPI_Pack(&float_data_count, 1, MPI_INT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
 > >         MPI_Pack(float_data, float_data_count, MPI_FLOAT, buffer, total_buffer_size, &position, MPI_COMM_WORLD);
 > >
-> >         /* buffer is sent in one communication using MPI_PACKED */
+> >         // buffer is sent in one communication using MPI_PACKED
 > >         MPI_Send(buffer, total_buffer_size, MPI_PACKED, 1, 0, MPI_COMM_WORLD);
 > >
 > >         free(buffer);
@@ -941,8 +976,8 @@ if (my_rank == 0) {
 > >         int position = 0;
 > >         int int_data_count, float_data_count;
 > >
-> >         /* Unpack an integer why defines the size of the integer array,
-> >         then allocate space for an unpack the actual array */
+> >         // Unpack an integer why defines the size of the integer array,
+> >         // then allocate space for an unpack the actual array
 > >         MPI_Unpack(buffer, buffer_size, &position, &int_data_count, 1, MPI_INT, MPI_COMM_WORLD);
 > >         int *int_data = malloc(int_data_count * sizeof(int));
 > >         MPI_Unpack(buffer, buffer_size, &position, int_data, int_data_count, MPI_INT, MPI_COMM_WORLD);
