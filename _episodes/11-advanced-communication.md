@@ -8,16 +8,16 @@ questions:
 - How do I communicate non-contiguous data which isn't easy to express as a derived data type?
 objectives:
 - Know how to define and use derived datatypes to communicate structures
-- Know how to use `MPI_Pack` and `MPI_Unpack` to communicate complex data structures
+- Know how to use `MPI_Pack()` and `MPI_Unpack()` to communicate complex data structures
 keypoints:
 - Structures can be communicated easier by using `MPI_Type_create_struct` to create a derived type describing the structure
-- The functions `MPI_Pack` and `MPI_Unpack` can be used to manually create a contiguous memory block of data, to communicate complex and/or heterogeneous data structures
+- The functions `MPI_Pack()` and `MPI_Unpack()` can be used to manually create a contiguous memory block of data, to communicate complex and/or heterogeneous data structures
 ---
 
 In an earlier episode, we introduced the concept of derived data types to send vectors or a sub-array of a larger array,
 which may or may not be contiguous in memory. Other than vectors, there are multiple other types of derived data types
 that allow us to handle other complex data structures efficiently. In this episode, we will see how to create structure
-derived types. Additionally, we will also learn how to use `MPI_Pack` and `MPI_Unpack` to manually pack complex data
+derived types. Additionally, we will also learn how to use `MPI_Pack()` and `MPI_Unpack()` to manually pack complex data
 structures and heterogeneous into a single contiguous buffer, when other methods of communication are too complicated or
 inefficient.
 
@@ -43,7 +43,7 @@ int MPI_Type_create_struct(
 ```
 
 | `count`: | The number of fields in the struct |
-| `*array_of_blocklengths`: | The length of each field, as you would use to send that field using `MPI_Send` |
+| `*array_of_blocklengths`: | The length of each field, as you would use to send that field using `MPI_Send()` |
 | `*array_of_displacements`: | The relative positions of each field in bytes |
 | `*array_of_types`: | The MPI type of each field |
 | `*newtype`: | The newly created data type for the struct |
