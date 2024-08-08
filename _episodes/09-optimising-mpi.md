@@ -103,12 +103,12 @@ communication overhead typically increases with the number of
 processes used.
 
 > ## Testing Code Performance on SLURM
-> 
+>
 > We also need a way to test our code on our HPC infrastructure of choice.
 > This will likely vary from system to system depending on your infrastructure configuration,
 > but for the COSMA site on DiRAC this may look something like (replacing the `<account>`, `<queue>`,
 > `<directory_containing_poisson_executable>` accordingly):
-> 
+>
 > ~~~
 > #!/usr/bin/env bash
 > #SBATCH --account=<account>
@@ -123,15 +123,15 @@ processes used.
 > module unload gnu_comp
 > module load gnu_comp/11.1.0
 > module load openmpi/4.1.4
-> 
+>
 > time mpirun -n 1 poisson_mpi
 > ~~~
 > {: .language-bash}
-> 
+>
 > So here, after loading the required compiler and OpenMPI modules,
 > we use the `time` command to output how long the process took to run for a given number of processors.
 > and ensure we specify `ntasks` correctly as the required number of cores we wish to use.
-> 
+>
 > We can then submit this using `sbatch`, e.g. `sbatch poisson-mpi.sh`,
 > with the output captured by default in a `slurm-....out` file
 > which will include the time taken to run the program.
@@ -246,9 +246,9 @@ to exhibit *linear weak scaling*.
 The other significant factors in the speed of a parallel program are
 communication speed and latency.
 
-Communication speed is determined by the amount of data one needs to 
+Communication speed is determined by the amount of data one needs to
 send/receive, and the bandwidth of the underlying hardware for the communication.
-Latency consists of the software latency (how long the 
+Latency consists of the software latency (how long the
 operating system needs in order to prepare for a communication),
 and the hardware latency (how long the hardware takes to
 send/receive even a small bit of data).
@@ -410,11 +410,11 @@ spent in the actual compute sections of the code.
 > ## Profile Your Poisson Code
 >
 > Compile, run and analyse your own MPI version of the poisson code.
-> 
+>
 > How closely does it match the performance above? What are the main differences?
 > Try reducing the number of processes used, rerun and investigate the profile.
-> Is it still MPI-bound? 
-> 
+> Is it still MPI-bound?
+>
 > Increase the problem size, recompile, rerun and investigate the profile.
 > What has changed now?
 {: .challenge}
@@ -422,7 +422,7 @@ spent in the actual compute sections of the code.
 > ## Iterative Improvement
 >
 > In the Poisson code, try changing the location of the calls
-> to `MPI_Send`. How does this affect performance?
+> to `MPI_Send()`. How does this affect performance?
 >
 {: .challenge}
 
