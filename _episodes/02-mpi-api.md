@@ -294,12 +294,14 @@ evenly across our ranks. Therefore, given 4 CPUs, for each rank the work would b
 CPU, as:
 
 ~~~
-Rank 1: 1 - 25,000
-Rank 2: 25,001 - 50,000
-Rank 3: 50,001 - 75,000
-Rank 4: 75,001 - 100,000
+Rank 0: 1 - 25,000
+Rank 1: 25,001 - 50,000
+Rank 2: 50,001 - 75,000
+Rank 3: 75,001 - 100,000
 ~~~
 {: .output}
+
+Note we start with rank 0, since MPI ranks start at zero.
 
 We can work out the iterations to undertake for a given rank number, by working out:
 - Work out the number of iterations per rank by dividing the total number of iterations we want to calculate by `num_ranks`
@@ -311,7 +313,7 @@ We could write this in C as:
 ~~~
 // calculate how many iterations each rank will deal with
 int iterations_per_rank = NUM_ITERATIONS / num_ranks;
-int rank_start = my_rank * iterations_per_rank;
+int rank_start = ( my_rank * iterations_per_rank) + 1;
 int rank_end = ((my_rank + 1) * iterations_per_rank) - 1;
 ~~~
 {: .language-c}
@@ -367,7 +369,7 @@ mpiexec -n 2 count_primes
 {: .language-bash}
 
 Of course, this solution only goes so far. We can add the resulting counts from each rank together to get our final
-number of primes between 0 and 100,000, but what would be useful would be to have our code somehow retrieve the results
+number of primes between 1 and 100,000, but what would be useful would be to have our code somehow retrieve the results
 from each rank and add them together, and output that overall result. More generally, ranks may need results from other
 ranks to complete their own computations. For this we would need ways for ranks to communicate - the primary benefit of
 MPI - which we'll look at in subsequent episodes.
