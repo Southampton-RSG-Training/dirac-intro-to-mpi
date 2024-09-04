@@ -305,16 +305,16 @@ Note we start with rank 0, since MPI ranks start at zero.
 
 We can work out the iterations to undertake for a given rank number, by working out:
 - Work out the number of iterations per rank by dividing the total number of iterations we want to calculate by `num_ranks`
-- Determine the start of the work iterations for this rank by multiplying our rank number by the iterations per rank
-- Determine the end of the work iterations for this rank by working out the hypothetical start of the next rank and deducting 1
+- Determine the start of the work iterations for this rank by multiplying our rank number by the iterations per rank, and adding 1
+- Determine the end of the work iterations for this rank by working out the point just before the hypothetical start of the next rank
 
 We could write this in C as:
 
 ~~~
 // calculate how many iterations each rank will deal with
 int iterations_per_rank = NUM_ITERATIONS / num_ranks;
-int rank_start = ( my_rank * iterations_per_rank) + 1;
-int rank_end = ((my_rank + 1) * iterations_per_rank) - 1;
+int rank_start = (my_rank * iterations_per_rank) + 1;
+int rank_end = (my_rank + 1) * iterations_per_rank;
 ~~~
 {: .language-c}
 
