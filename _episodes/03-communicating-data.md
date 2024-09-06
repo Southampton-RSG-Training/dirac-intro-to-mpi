@@ -183,13 +183,13 @@ The difference between the communication mode is when the buffer becomes safe to
 | Synchronous | `MPI_SSend()`     |
 | Buffered    | `MPI_Bsend()`     |
 | Ready       | `MPI_Rsend()`     |
-| Send        | `MPI_Send()`      |
+| Standard    | `MPI_Send()`      |
 
 In contrast to the four modes for sending data, receiving data only has one mode and therefore only a single function.
 
-| Mode    | MPI Function |
-| ------- | ------------ |
-| Receive | `MPI_Recv()` |
+| Mode     | MPI Function |
+| -------- | ------------ |
+| Standard | `MPI_Recv()` |
 
 ### Synchronous sends
 
