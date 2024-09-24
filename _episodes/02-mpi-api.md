@@ -8,10 +8,11 @@ questions:
 - What is MPI?
 - How to run a code with MPI?
 objectives:
-- Learn what the Message Passing Interface (MPI) is
-- Understand how to use the MPI API
-- Learn how to compile and run MPI applications
-- Use MPI to coordinate the use of multiple processes across CPUs.
+- Describe what the Message Passing Interface (MPI) is
+- Use the MPI API in a program
+- Compile and run MPI applications
+- Use MPI to coordinate the use of multiple processes across CPUs
+- Submit an MPI program to the Slurm batch scheduler
 keypoints:
 - The MPI standards define the syntax and semantics of a library of routines used for message passing.
 - By default, the order in which operations are run between parallel MPI processes is arbitrary.

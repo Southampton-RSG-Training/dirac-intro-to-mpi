@@ -7,8 +7,9 @@ questions:
 - How do I communicate structures?
 - How do I communicate non-contiguous data which isn't easy to express as a derived data type?
 objectives:
-- Know how to define and use derived datatypes to communicate structures
-- Know how to use `MPI_Pack()` and `MPI_Unpack()` to communicate complex data structures
+- Define and use an MPI structure to represent complex data
+- Use MPI to package non-contiguous data for communication
+- Use MPI to unpackage data into non-contiguous structures
 keypoints:
 - Structures can be communicated easier by using `MPI_Type_create_struct` to create a derived type describing the structure
 - The functions `MPI_Pack()` and `MPI_Unpack()` can be used to manually create a contiguous memory block of data, to communicate complex and/or heterogeneous data structures

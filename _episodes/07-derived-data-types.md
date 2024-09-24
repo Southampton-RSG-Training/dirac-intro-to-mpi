@@ -7,8 +7,10 @@ questions:
 - How do I use complex data structures in MPI?
 - What is contiguous memory, and why does it matter?
 objectives:
-- Understand the problems of non-contiguous memory in MPI
-- Know how to define and use derived data types
+- Explain what a derived data type is and how they can help
+- Define and explain the challenges associated with non-contiguous memory
+- Describe the limitations of using malloc() in terms of  memory contiguity
+- Use vectors to send column slices of an array to another rank
 keypoints:
 - Any data being transferred should be a single contiguous block of memory
 - By defining derived data types, we can more easily send data which is not contiguous

@@ -7,8 +7,11 @@ questions:
 - What are the advantages of non-blocking communication?
 - How do I use non-blocking communication?
 objectives:
-- Understand the advantages and disadvantages of non-blocking communication
-- Know how to use non-blocking communication functions
+- Describe the advantages and disadvantages of non-blocking communication
+- Use non-blocking variants of MPI's send and receive functions
+- Use MPI to wait until a non-blocking MPI communication has completed
+- Use MPI to test the status of non-blocking MPI communication
+- Use non-blocking variants of MPI's collective functions
 keypoints:
 - Non-blocking communication often leads to performance improvements compared to blocking communication
 - However, it is usually more difficult to use non-blocking communication

@@ -6,8 +6,11 @@ exercises: 10
 questions:
 - How do I send data between processes?
 objectives:
-- Describe what is meant by point-to-point communication.
-- Learn how to send and receive data between ranks.
+- Describe what is meant by point-to-point communication
+- Describe the arguments to MPI_Send() and MPI_Recv()
+- Use MPI_Send() to send a message to another rank
+- Use MPI_Recv() to receive a message from another rank
+- Write, compile and run a complete program that sends a message from one rank to another
 keypoints:
 - Use `MPI_Send()` and `MPI_Recv()` to send and receive data between ranks
 - Using `MPI_Ssend()` will always block the sending rank until the message is received
