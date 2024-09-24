@@ -11,10 +11,11 @@ questions:
 - How do we characterise the classes of problems to which parallelism can be applied?
 - How should I approach parallelising my program?
 objectives:
-- Understand the fundamentals of parallelisation and parallel programming
-- Understand the shared and distributed memory parallelisation and their advantages/disadvantages
-- Learn and understand different parallel paradigms and algorithm design.
-- Describe the differences between the data parallelism and message passing paradigms.
+- Describe what the Message Passing Interface (MPI) is
+- Use the MPI API in a program
+- Compile and run MPI applications
+- Use MPI to coordinate the use of multiple processes across CPUs
+- Submit an MPI program to the Slurm batch scheduler
 keypoints:
 - Processes do not share memory and can reside on the same or different computers.
 - Threads share memory and reside in a process on the same computer.

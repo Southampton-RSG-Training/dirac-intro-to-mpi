@@ -7,8 +7,10 @@ math: true
 questions:
 - What are some common data communication patterns in MPI?
 objectives:
-- Learn and understand common communication patterns
-- Be able to determine what communication pattern you should use for your own MPI applications
+- Describe an example of how scatter and gather communication is used in mathematical matrix processing
+- Describe an example use of reduction within a Monte Carlo application
+- Describe how a spatial problem space can be decomposed into sub-domains for processing
+- Describe the features of halo exchange and how it applies to sub-domain processing
 keypoints:
 - There are many ways to communicate data, which we need to think about carefully
 - It's better to use collective operations, rather than implementing similar behaviour yourself

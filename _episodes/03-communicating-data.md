@@ -6,7 +6,12 @@ exercises: 5
 questions:
 - How do I exchange data between MPI ranks?
 objectives:
-- Understand how data is exchanged between MPI ranks
+- Differentiate between point-to-point and collective communication
+- List basic MPI data types
+- Describe the role of a communicator
+- List the communication modes for sending and receiving data
+- Differentiate between blocking and non-blocking communication
+- Describe and list possible causes of deadlock
 keypoints:
 - Data is sent between ranks using "messages"
 - Messages can either block the program or be sent/received asynchronously

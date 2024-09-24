@@ -6,8 +6,12 @@ exercises: 0
 questions:
 - How do I get data to more than one rank?
 objectives:
-- Understand what collective communication is and its advantages
-- Learn how to use collective communication functions
+- Describe what is meant by collective communication, and its advantages
+- Describe how to synchronise ranks using MPI
+- Broadcast a message to multiple ranks
+- Describe how to split and send data across multiple ranks, and receive data from multiple ranks
+- Describe how to "reduce" values from across multiple ranks
+- Describe how to perform broadcasting and reduction in a single MPI call
 keypoints:
 - Using point-to-point communication to send/receive data to/from all ranks is inefficient
 - It's far more efficient to send/receive data to/from multiple ranks by using collective operations

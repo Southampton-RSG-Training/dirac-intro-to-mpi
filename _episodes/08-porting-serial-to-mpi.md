@@ -7,9 +7,10 @@ questions:
 - What is the best way to write a parallel code?
 - How do I parallelise my existing serial code?
 objectives:
-- Practice how to identify which parts of a codebase would benefit from parallelisation, and those that need to be done serially or only once
-- Convert a serial code into a parallel code
+- Identify which parts of a serial program would benefit from parallelisation
+- Explore how to convert a serial program into an MPI version
 - Differentiate between choices of communication pattern and algorithm design
+- Explain the importance of testing a parallel version against its serial version
 keypoints:
 - Start from a working serial code
 - Write a parallel implementation for each function or parallel region
